@@ -14,7 +14,7 @@ public class NewCommand {
             return;
         }
         if (!StorageBoxPlugin.bypassingPlayers.contains(player.getUniqueId())) {
-            if (!hasAtLeast(player, Material.DIAMOND, 8) || !hasAtLeast(player, Material.CHEST, 1)) {
+            if (hasAtLeast(player, Material.DIAMOND, 8) || hasAtLeast(player, Material.CHEST, 1)) {
                 player.sendMessage(ChatColor.RED + "チェスト1個とダイヤ8個が必要です。");
                 return;
             }
@@ -36,10 +36,10 @@ public class NewCommand {
             if (item != null && item.getType() == material) {
                 count += item.getAmount();
                 if (count >= amount) {
-                    return true;
+                    return false;
                 }
             }
         }
-        return false;
+        return true;
     }
 }

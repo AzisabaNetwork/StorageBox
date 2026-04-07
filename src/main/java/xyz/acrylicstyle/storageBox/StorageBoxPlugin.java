@@ -92,6 +92,7 @@ public class StorageBoxPlugin extends JavaPlugin implements Listener {
     }
 
     private void loadPrices(@NotNull String path, @NotNull Map<ItemStack, Long> map) {
+        map.clear();
         ConfigurationSection section = getConfig().getConfigurationSection(path);
         if (section == null) return;
         for (String key : section.getKeys(false)) {
@@ -113,6 +114,15 @@ public class StorageBoxPlugin extends JavaPlugin implements Listener {
                 e.printStackTrace();
             }
         }
+    }
+
+    public long findBuyPrice(@NotNull ItemStack itemStack) {
+        return buyPrices.entrySet()
+                .stream()
+                .filter(e -> e.getKey().isSimilar(itemStack))
+                .findFirst()
+                .map(Map.Entry::getValue)
+                .orElse(0L);
     }
 
     @Override
@@ -164,9 +174,23 @@ public class StorageBoxPlugin extends JavaPlugin implements Listener {
             return;
         }
         if (storageBox.isEmpty()) {
-            e.getPlayer().sendMessage(ChatColor.RED + "Storage Boxが空です。");
-            e.setCancelled(true);
-            return;
+            if (!storageBox.isAutoBuy()) {
+                e.getPlayer().sendMessage(ChatColor.RED + "Storage Boxが空です。");
+                e.setCancelled(true);
+                return;
+            }
+            long price = findBuyPrice(storageBox.getComponentItemStack());
+            if (price <= 0) {
+                e.getPlayer().sendMessage(ChatColor.RED + "このStorage Boxのアイテムは自動購入できません。");
+                e.setCancelled(true);
+                return;
+            }
+            if (!getEconomy().withdrawPlayer(e.getPlayer(), price).transactionSuccess()) {
+                e.getPlayer().sendMessage(ChatColor.RED + "お金が足りないので、自動購入できません。");
+                e.setCancelled(true);
+                return;
+            }
+            storageBox.setAmount(1);
         }
         BlockState placedState = e.getBlockPlaced().getState();
         e.setCancelled(true);
@@ -291,3 +315,5 @@ public class StorageBoxPlugin extends JavaPlugin implements Listener {
         return Objects.requireNonNull(provider).getProvider();
     }
 }
+
+

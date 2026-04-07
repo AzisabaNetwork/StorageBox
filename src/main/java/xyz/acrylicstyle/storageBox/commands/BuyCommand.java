@@ -7,28 +7,18 @@ import org.bukkit.inventory.ItemStack;
 import xyz.acrylicstyle.storageBox.StorageBoxPlugin;
 import xyz.acrylicstyle.storageBox.utils.StorageBox;
 
-import java.util.Map;
-
 public class BuyCommand {
     public static void onCommand(Player player, String[] args) {
         StorageBox storageBox = StorageBox.getStorageBox(player.getInventory().getItemInMainHand());
         if (storageBox == null) {
-            player.sendMessage(ChatColor.RED + "現在手に持ってるアイテムはStorage Boxではありません。");
+            player.sendMessage(ChatColor.RED + "現在手に持っているアイテムはStorage Boxではありません。");
             player.sendMessage(ChatColor.RED + "Storage Boxを手に持ってからもう一度試してください。");
             return;
         }
         ItemStack componentItemStack = storageBox.getComponentItemStack();
-        long price =
-                StorageBoxPlugin.getInstance()
-                        .buyPrices
-                        .entrySet()
-                        .stream()
-                        .filter(e -> e.getKey().isSimilar(componentItemStack))
-                        .findAny()
-                        .map(Map.Entry::getValue)
-                        .orElse(0L);
+        long price = StorageBoxPlugin.getInstance().findBuyPrice(componentItemStack);
         if (price == 0) {
-            player.sendMessage(ChatColor.RED + "このアイテムは買えません。");
+            player.sendMessage(ChatColor.RED + "このアイテムは購入できません。");
             return;
         }
         long amount;
@@ -43,7 +33,7 @@ public class BuyCommand {
             return;
         }
         if (storageBox.getAmount() + amount < 0) {
-            player.sendMessage(ChatColor.RED + "オーバーフローさせないで！！！！");
+            player.sendMessage(ChatColor.RED + "オーバーフローするため購入できません。");
             return;
         }
         long money = amount * price;
@@ -51,10 +41,10 @@ public class BuyCommand {
         if (response.transactionSuccess()) {
             storageBox.setAmount(storageBox.getAmount() + amount);
             player.getInventory().setItemInMainHand(storageBox.getItemStack());
-            player.sendMessage(ChatColor.GREEN + "アイテムを" + ChatColor.RED + amount + ChatColor.GREEN + "個買いました。");
-            player.sendMessage("" + ChatColor.GREEN + money + "円が口座から引き出されました。");
+            player.sendMessage(ChatColor.GREEN + "アイテムを" + ChatColor.RED + amount + ChatColor.GREEN + "個購入しました。");
+            player.sendMessage(ChatColor.GREEN + String.valueOf(money) + "円が口座から引き出されました");
         } else {
-            player.sendMessage(ChatColor.RED + "購入に失敗しました。お金が足りない可能性があります。 (" + response.errorMessage + ")");
+            player.sendMessage(ChatColor.RED + "購入に失敗しました。お金が足りない可能性があります。(" + response.errorMessage + ")");
         }
     }
 }

@@ -69,14 +69,14 @@ public class McMMOListener implements Listener {
         boolean check = false;
         List<Item> toRemove = new ArrayList<>();
         for (Item item : e.getItems()) {
-            //if (item.getItemStack().hasItemMeta()) continue;
+            // if (item.getItemStack().hasItemMeta()) continue;
             Map.Entry<Integer, StorageBox> storageBox = StorageBoxUtils.getStorageBoxForType(p.getInventory(), item.getItemStack());
             if (storageBox == null) return;
             e.setCancelled(true);
             check = true;
             long amount = item.getItemStack().getAmount();
             item.remove();
-//            player.playSound(player.getLocation(), Sound.ENTITY_ITEM_PICKUP, 0.8F, 1.9F);
+            // player.playSound(player.getLocation(), Sound.ENTITY_ITEM_PICKUP, 0.8F, 1.9F);
             storageBox.getValue().setAmount(storageBox.getValue().getAmount() + amount + bonus);
             p.getInventory().setItem(storageBox.getKey(), storageBox.getValue().getItemStack());
             toRemove.add(item);

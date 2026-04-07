@@ -18,6 +18,7 @@ public class StorageBoxTabCompleter implements TabCompleter {
     private static final List<String> emptyList = new ArrayList<>();
 
     private static final List<String> commands = Arrays.asList(
+            "autobuy",
             "autocollect",
             "changetype",
             "extract",
@@ -31,6 +32,7 @@ public class StorageBoxTabCompleter implements TabCompleter {
     );
 
     private static final List<String> opCommands = Arrays.asList(
+            "autobuy",
             "bypass",
             "setamount",
             "settype",
