@@ -8,20 +8,20 @@ public class AutoBuyCommand {
     public static void onCommand(Player player) {
         StorageBox storageBox = StorageBox.getStorageBox(player.getInventory().getItemInMainHand());
         if (storageBox == null) {
-            player.sendMessage(ChatColor.RED + "The item in your main hand is not a Storage Box.");
-            player.sendMessage(ChatColor.RED + "Hold a Storage Box and try again.");
+            player.sendMessage(ChatColor.RED + "現在手に持っているアイテムはStorage Boxではありません。");
+            player.sendMessage(ChatColor.RED + "Storage Boxを手に持ってからもう一度試してください。");
             return;
         }
         if (!storageBox.isAutoBuyConfigured()) {
             storageBox.setAutoBuy(true);
             player.getInventory().setItemInMainHand(storageBox.getItemStack());
-            player.sendMessage(ChatColor.YELLOW + "This Storage Box did not have an auto-buy setting yet.");
-            player.sendMessage(ChatColor.GREEN + "Auto buy has been enabled and its NBT was added.");
+            player.sendMessage(ChatColor.YELLOW + "このStorage Boxにはauto-buy設定がありません。");
+            player.sendMessage(ChatColor.GREEN + "Storage Boxにauto-buy設定が追加されました。");
             return;
         }
         boolean enabled = storageBox.isAutoBuy();
         storageBox.setAutoBuy(!enabled);
         player.getInventory().setItemInMainHand(storageBox.getItemStack());
-        player.sendMessage(ChatColor.GREEN + "Auto buy set to " + ChatColor.YELLOW + (!enabled) + ChatColor.GREEN + ".");
+        player.sendMessage(ChatColor.GREEN + "自動購入を" + ChatColor.YELLOW + (!enabled) + ChatColor.GREEN + "にしました。");
     }
 }
