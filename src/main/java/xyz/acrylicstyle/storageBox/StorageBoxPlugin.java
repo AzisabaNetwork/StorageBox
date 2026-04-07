@@ -1,5 +1,7 @@
 package xyz.acrylicstyle.storageBox;
 
+import net.md_5.bungee.api.ChatMessageType;
+import net.md_5.bungee.api.chat.TextComponent;
 import net.milkbowl.vault.economy.Economy;
 import net.minecraft.server.v1_15_R1.MojangsonParser;
 import net.minecraft.server.v1_15_R1.NBTTagCompound;
@@ -173,6 +175,7 @@ public class StorageBoxPlugin extends JavaPlugin implements Listener {
         if (storageBox == null) {
             return;
         }
+        boolean autoBought = false;
         if (storageBox.isEmpty()) {
             if (!storageBox.isAutoBuy()) {
                 e.getPlayer().sendMessage(ChatColor.RED + "Storage Boxが空です。");
@@ -191,6 +194,7 @@ public class StorageBoxPlugin extends JavaPlugin implements Listener {
                 return;
             }
             storageBox.setAmount(1);
+            autoBought = true;
         }
         BlockState placedState = e.getBlockPlaced().getState();
         e.setCancelled(true);
@@ -199,6 +203,9 @@ public class StorageBoxPlugin extends JavaPlugin implements Listener {
             e.getPlayer().getInventory().setItemInMainHand(storageBox.getItemStack());
         } else {
             e.getPlayer().getInventory().setItemInOffHand(storageBox.getItemStack());
+        }
+        if (autoBought) {
+            e.getPlayer().spigot().sendMessage(ChatMessageType.ACTION_BAR, new TextComponent(ChatColor.translateAlternateColorCodes('&', "&a&lStorage Boxのアイテムを自動購入して設置しました。")));
         }
         run(() -> {
             BlockPlaceEvent event = new BlockPlaceEvent(e.getBlockPlaced(), e.getBlockReplacedState(), e.getBlockAgainst(), e.getItemInHand(), e.getPlayer(), e.canBuild(), e.getHand());
