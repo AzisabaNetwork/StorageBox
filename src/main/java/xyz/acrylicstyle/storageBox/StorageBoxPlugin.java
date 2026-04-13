@@ -1,5 +1,8 @@
 package xyz.acrylicstyle.storageBox;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import net.md_5.bungee.api.ChatMessageType;
 import net.md_5.bungee.api.chat.TextComponent;
 import net.milkbowl.vault.economy.Economy;
@@ -30,6 +33,7 @@ import org.bukkit.plugin.RegisteredServiceProvider;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import xyz.acrylicstyle.storageBox.gui.ShopScreen;
 import xyz.acrylicstyle.storageBox.listener.McMMOListener;
 import xyz.acrylicstyle.storageBox.listener.MyPetListener;
@@ -37,11 +41,14 @@ import xyz.acrylicstyle.storageBox.network.ChannelUtil;
 import xyz.acrylicstyle.storageBox.utils.StorageBox;
 import xyz.acrylicstyle.storageBox.utils.StorageBoxUtils;
 
+import java.io.InputStreamReader;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
 
 public class StorageBoxPlugin extends JavaPlugin implements Listener {
+    private static final Gson GSON = new Gson();
+    public static JsonObject materialTranslations;
     public static Logger LOGGER;
     public static List<UUID> bypassingPlayers = new ArrayList<>();
     public static Integer customModelData = null;
@@ -339,5 +346,20 @@ public class StorageBoxPlugin extends JavaPlugin implements Listener {
     public static @NotNull Economy getEconomy() {
         RegisteredServiceProvider<Economy> provider = Bukkit.getServicesManager().getRegistration(Economy.class);
         return Objects.requireNonNull(provider).getProvider();
+    }
+
+    public static @NotNull JsonObject getMaterialTranslations() {
+        if (materialTranslations != null) return materialTranslations;
+        String filename = "ja_jp.json";
+        return materialTranslations = GSON.fromJson(new InputStreamReader(Objects.requireNonNull(StorageBoxPlugin.class.getResourceAsStream("/material_translations/" + filename))), JsonObject.class);
+    }
+
+    public static @Nullable String findTranslation(@NotNull Material material) {
+        JsonObject translations = getMaterialTranslations();
+        JsonElement element = translations.get("block.minecraft." + material.name().toLowerCase());
+        if (element == null) {
+            element = translations.get("item.minecraft." + material.name().toLowerCase());
+        }
+        return element.getAsString();
     }
 }

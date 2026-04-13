@@ -113,6 +113,8 @@ public class StorageBox {
         if (Objects.requireNonNull(stack).hasItemMeta() && Objects.requireNonNull(stack.getItemMeta()).hasDisplayName()) {
             return Objects.requireNonNull(stack.getItemMeta()).getDisplayName();
         }
+        String i18nName = StorageBoxPlugin.findTranslation(type);
+        if (i18nName != null) return i18nName;
         String name = type.name().replaceAll("_", " ").toLowerCase();
         return name.substring(0, 1).toUpperCase() + name.substring(1).toLowerCase();
     }
