@@ -87,7 +87,7 @@ public class RootCommand implements CommandExecutor {
         sender.sendMessage(help("buy [数]", "Storage Box内のアイテムを購入します。"));
         sender.sendMessage(help("shop", "Storage Boxショップを開きます。"));
         sender.sendMessage(help("gomi [数]", "Storage Boxの中身を破棄します。"));
-        sender.sendMessage(help("merge", "オフハンドのStorage Boxをメインハンドに結合します。"));
+        sender.sendMessage(help("merge [数]", "オフハンドのStorage Boxをメインハンドに結合します。"));
         if (sender.hasPermission("storagebox.op")) {
             sender.sendMessage(help("bypass", "アイテムチェックなどを無視します。[OP]"));
             sender.sendMessage(help("setamount <amount>", "アイテムの数を設定します。[OP]"));
