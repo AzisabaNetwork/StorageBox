@@ -67,7 +67,7 @@ public class RootCommand implements CommandExecutor {
         } else if (args[0].equalsIgnoreCase("gomi")) {
             GomiCommand.onCommand(player, slicedArgs);
         } else if (args[0].equalsIgnoreCase("merge")) {
-            MergeCommand.onCommand(player);
+            MergeCommand.onCommand(player, slicedArgs);
         } else {
             sendHelp(sender);
         }
