@@ -28,7 +28,8 @@ public class StorageBoxTabCompleter implements TabCompleter {
             "sell",
             "buy",
             "shop",
-            "gomi"
+            "gomi",
+            "merge"
     );
 
     private static final List<String> opCommands = Arrays.asList(
@@ -45,7 +46,8 @@ public class StorageBoxTabCompleter implements TabCompleter {
             "sell",
             "buy",
             "shop",
-            "gomi"
+            "gomi",
+            "merge"
     );
 
     private static List<String> materials = null;

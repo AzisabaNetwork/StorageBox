@@ -53,7 +53,7 @@ public class RootCommand implements CommandExecutor {
         } else if (args[0].equalsIgnoreCase("extract")) {
             ExtractCommand.onCommand(player, slicedArgs);
         } else if (args[0].equalsIgnoreCase("new")) {
-            NewCommand.onCommand(player);
+            NewCommand.onCommand(player, slicedArgs);
         } else if (args[0].equalsIgnoreCase("setamount") && player.hasPermission("storagebox.op")) {
             SetAmountCommand.onCommand(player, slicedArgs);
         } else if (args[0].equalsIgnoreCase("settype") && player.hasPermission("storagebox.op")) {
@@ -66,6 +66,8 @@ public class RootCommand implements CommandExecutor {
             ShopCommand.onCommand(player);
         } else if (args[0].equalsIgnoreCase("gomi")) {
             GomiCommand.onCommand(player, slicedArgs);
+        } else if (args[0].equalsIgnoreCase("merge")) {
+            MergeCommand.onCommand(player);
         } else {
             sendHelp(sender);
         }
@@ -85,6 +87,7 @@ public class RootCommand implements CommandExecutor {
         sender.sendMessage(help("buy [数]", "Storage Box内のアイテムを購入します。"));
         sender.sendMessage(help("shop", "Storage Boxショップを開きます。"));
         sender.sendMessage(help("gomi [数]", "Storage Boxの中身を破棄します。"));
+        sender.sendMessage(help("merge", "オフハンドのStorage Boxをメインハンドに結合します。"));
         if (sender.hasPermission("storagebox.op")) {
             sender.sendMessage(help("bypass", "アイテムチェックなどを無視します。[OP]"));
             sender.sendMessage(help("setamount <amount>", "アイテムの数を設定します。[OP]"));

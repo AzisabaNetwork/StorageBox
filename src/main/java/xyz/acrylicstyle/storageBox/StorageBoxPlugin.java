@@ -127,6 +127,25 @@ public class StorageBoxPlugin extends JavaPlugin implements Listener {
                 .orElse(0L);
     }
 
+    public long getStorageBoxCreationPrice() {
+        long diamondPrice = findBuyPrice(new ItemStack(Material.DIAMOND));
+        long chestPrice = findBuyPrice(new ItemStack(Material.CHEST));
+        if (chestPrice > 0) {
+            return diamondPrice <= 0 ? 0 : diamondPrice * 8 + chestPrice;
+        }
+
+        long plankPrice = Arrays.stream(Material.values())
+                .filter(material -> material.name().endsWith("_PLANKS"))
+                .mapToLong(material -> findBuyPrice(new ItemStack(material)))
+                .filter(price -> price > 0)
+                .min()
+                .orElse(0L);
+        if (diamondPrice <= 0 || plankPrice <= 0) {
+            return 0;
+        }
+        return diamondPrice * 8 + plankPrice * 8;
+    }
+
     @Override
     public void onDisable() {
         for (Player player : Bukkit.getOnlinePlayers()) {
@@ -182,7 +201,7 @@ public class StorageBoxPlugin extends JavaPlugin implements Listener {
                 e.setCancelled(true);
                 return;
             }
-            long price = findBuyPrice(storageBox.getComponentItemStack());
+            long price = findBuyPrice(Objects.requireNonNull(storageBox.getComponentItemStack()));
             if (price <= 0) {
                 e.getPlayer().sendMessage(ChatColor.RED + "このStorage Boxのアイテムは自動購入できません。");
                 e.setCancelled(true);
@@ -322,5 +341,3 @@ public class StorageBoxPlugin extends JavaPlugin implements Listener {
         return Objects.requireNonNull(provider).getProvider();
     }
 }
-
-
