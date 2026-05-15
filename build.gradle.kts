@@ -13,7 +13,7 @@ version = "1.5.6+1.21.11"
 java {
     toolchain.languageVersion.set(JavaLanguageVersion.of(21))
 
-    //withJavadocJar()
+    // withJavadocJar()
     withSourcesJar()
 }
 
@@ -27,7 +27,6 @@ repositories {
 }
 
 dependencies {
-    compileOnly(files("libs/MyPet-3.10.jar"))
     compileOnly("com.github.MilkBowl:VaultAPI:1.7") {
         exclude("org.bukkit", "bukkit")
     }
@@ -51,12 +50,16 @@ publishing {
         maven {
             name = "repo"
             credentials(PasswordCredentials::class)
-            url = uri(
-                if (project.version.toString().endsWith("SNAPSHOT"))
-                    project.findProperty("deploySnapshotURL") ?: System.getProperty("deploySnapshotURL", "https://repo.azisaba.net/repository/maven-snapshots/")
-                else
-                    project.findProperty("deployReleasesURL") ?: System.getProperty("deployReleasesURL", "https://repo.azisaba.net/repository/maven-releases/")
-            )
+            url =
+                uri(
+                    if (project.version.toString().endsWith("SNAPSHOT")) {
+                        project.findProperty("deploySnapshotURL")
+                            ?: System.getProperty("deploySnapshotURL", "https://repo.azisaba.net/repository/maven-snapshots/")
+                    } else {
+                        project.findProperty("deployReleasesURL")
+                            ?: System.getProperty("deployReleasesURL", "https://repo.azisaba.net/repository/maven-releases/")
+                    },
+                )
         }
     }
 
@@ -80,7 +83,11 @@ tasks {
         doNotTrackState("plugin.yml should be updated every time")
         duplicatesStrategy = DuplicatesStrategy.INCLUDE
 
-        from(sourceSets.main.get().resources.srcDirs) {
+        from(
+            sourceSets.main
+                .get()
+                .resources.srcDirs,
+        ) {
             filter(ReplaceTokens::class, mapOf("tokens" to mapOf("version" to project.version.toString())))
             filteringCharset = "UTF-8"
         }

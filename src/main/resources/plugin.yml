@@ -7,7 +7,6 @@ depend:
   - Vault
 softdepend:
   - mcMMO
-  - MyPet
 commands:
   storagebox:
     aliases: ["sb", "storage"]

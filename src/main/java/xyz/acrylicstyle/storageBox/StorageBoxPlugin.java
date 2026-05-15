@@ -31,7 +31,6 @@ import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import xyz.acrylicstyle.storageBox.gui.ShopScreen;
 import xyz.acrylicstyle.storageBox.listener.McMMOListener;
-import xyz.acrylicstyle.storageBox.listener.MyPetListener;
 import xyz.acrylicstyle.storageBox.network.ChannelUtil;
 import xyz.acrylicstyle.storageBox.utils.StorageBox;
 import xyz.acrylicstyle.storageBox.utils.StorageBoxUtils;
@@ -79,11 +78,6 @@ public class StorageBoxPlugin extends JavaPlugin implements Listener {
 
         // delay init
         Bukkit.getScheduler().runTask(this, () -> {
-            if (Bukkit.getPluginManager().isPluginEnabled("MyPet")) {
-                Bukkit.getPluginManager().registerEvents(new MyPetListener(), this);
-            } else {
-                getLogger().info("MyPet is not enabled, skipping event registration");
-            }
             if (Bukkit.getPluginManager().isPluginEnabled("mcMMO")) {
                 Bukkit.getPluginManager().registerEvents(new McMMOListener(), this);
             } else {
