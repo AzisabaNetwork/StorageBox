@@ -53,9 +53,9 @@ publishing {
             credentials(PasswordCredentials::class)
             url = uri(
                 if (project.version.toString().endsWith("SNAPSHOT"))
-                    project.findProperty("deploySnapshotURL") ?: System.getProperty("deploySnapshotURL", "https://repo.acrylicstyle.xyz/repository/maven-snapshots/")
+                    project.findProperty("deploySnapshotURL") ?: System.getProperty("deploySnapshotURL", "https://repo.azisaba.net/repository/maven-snapshots/")
                 else
-                    project.findProperty("deployReleasesURL") ?: System.getProperty("deployReleasesURL", "https://repo.acrylicstyle.xyz/repository/maven-releases/")
+                    project.findProperty("deployReleasesURL") ?: System.getProperty("deployReleasesURL", "https://repo.azisaba.net/repository/maven-releases/")
             )
         }
     }
