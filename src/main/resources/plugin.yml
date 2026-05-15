@@ -10,3 +10,7 @@ softdepend:
 commands:
   storagebox:
     aliases: ["sb", "storage"]
+
+permissions:
+  storagebox.op:
+    default: op

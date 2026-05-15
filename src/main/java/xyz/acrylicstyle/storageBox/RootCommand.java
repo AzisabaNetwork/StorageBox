@@ -22,7 +22,7 @@ public class RootCommand implements CommandExecutor {
                 sender.sendMessage("/sb give <player>");
                 return true;
             }
-            if (args[0].equals("give")) {
+            if (args[0].equals("give") && args.length >= 2) {
                 Player player = Bukkit.getPlayerExact(args[1]);
                 if (player != null) {
                     player.getInventory().addItem(StorageBox.getNewStorageBox().getItemStack());
@@ -37,7 +37,9 @@ public class RootCommand implements CommandExecutor {
         List<String> argsList = new ArrayList<>(Arrays.asList(args));
         argsList.remove(0);
         String[] slicedArgs = argsList.toArray(new String[0]);
-        if (args[0].equalsIgnoreCase("autocollect")) {
+        if(args[0].equalsIgnoreCase("autobuy")) {
+            AutoBuyCommand.onCommand(player);
+        } else if (args[0].equalsIgnoreCase("autocollect")) {
             AutoCollectCommand.onCommand(player);
         } else if (args[0].equalsIgnoreCase("bypass") && player.hasPermission("storagebox.op")) {
             BypassCommand.onCommand(player);
@@ -50,7 +52,7 @@ public class RootCommand implements CommandExecutor {
         } else if (args[0].equalsIgnoreCase("extract")) {
             ExtractCommand.onCommand(player, slicedArgs);
         } else if (args[0].equalsIgnoreCase("new")) {
-            NewCommand.onCommand(player);
+            NewCommand.onCommand(player, slicedArgs);
         } else if (args[0].equalsIgnoreCase("setamount") && player.hasPermission("storagebox.op")) {
             SetAmountCommand.onCommand(player, slicedArgs);
         } else if (args[0].equalsIgnoreCase("settype") && player.hasPermission("storagebox.op")) {
@@ -61,7 +63,11 @@ public class RootCommand implements CommandExecutor {
             BuyCommand.onCommand(player, slicedArgs);
         } else if (args[0].equalsIgnoreCase("shop")) {
             ShopCommand.onCommand(player);
-        } else {
+        } if (args[0].equalsIgnoreCase("gomi")) {
+            GomiCommand.onCommand(player, slicedArgs);
+        }else if (args[0].equalsIgnoreCase("merge")) {
+            MergeCommand.onCommand(player, slicedArgs);
+        }else {
             sendHelp(sender);
         }
         return true;
@@ -69,15 +75,18 @@ public class RootCommand implements CommandExecutor {
 
     public static void sendHelp(CommandSender sender) {
         sender.sendMessage(ChatColor.GOLD + "------------------------------");
-        sender.sendMessage(help("autocollect", "アイテムの自動回収を切り替えます。"));
-        sender.sendMessage(help("changetype", "StorageBoxのアイテムの中身を変えます。オフハンドに変更先のアイテムを持ってください。"));
-        sender.sendMessage(help("collect", "手に持ってるStorage Boxにインベントリに入ってるブロックを収納します。"));
-        sender.sendMessage(help("convert", "Storage Boxの種類を変換します。"));
-        sender.sendMessage(help("extract <数>", "アイテムをStorage Boxから取り出します。"));
-        sender.sendMessage(help("new", "新しいStorage Boxを作成します。"));
-        sender.sendMessage(help("sell [数]", "アイテムを売ります。"));
-        sender.sendMessage(help("buy [数]", "アイテムを買います。"));
-        sender.sendMessage(help("shop", "StorageBoxを買います。"));
+        sender.sendMessage(help("autobuy", "残量0で設置時，自動購入して設置を継続します。"));
+        sender.sendMessage(help("autocollect", "同種アイテムの自動回収を切り替えます。"));
+        sender.sendMessage(help("changetype", "オフハンドのアイテムをStorage Boxの中身にします。"));
+        sender.sendMessage(help("collect", "足元の同種アイテムをStorage Boxへ回収します。"));
+        sender.sendMessage(help("convert", "Storage Boxの見た目を更新します。"));
+        sender.sendMessage(help("extract <数>", "Storage Boxから中身を取り出します。"));
+        sender.sendMessage(help("new", "新しいStorage Boxを取得します。"));
+        sender.sendMessage(help("sell [数]", "Storage Box内のアイテムを売却します。"));
+        sender.sendMessage(help("buy [数]", "Storage Box内のアイテムを購入します。"));
+        sender.sendMessage(help("shop", "Storage Boxショップを開きます。"));
+        sender.sendMessage(help("gomi [数]", "Storage Boxの中身を破棄します。"));
+        sender.sendMessage(help("merge [数]", "オフハンドのStorage Boxをメインハンドに結合します。"));
         if (sender.hasPermission("storagebox.op")) {
             sender.sendMessage(help("bypass", "アイテムチェックなどを無視します。[OP]"));
             sender.sendMessage(help("setamount <amount>", "アイテムの数を設定します。[OP]"));

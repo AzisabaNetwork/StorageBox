@@ -30,23 +30,27 @@ public class StorageBox {
     }
 
     private boolean autoCollect;
+    private boolean autoBuy;
+    private boolean autoBuyConfigured;
     private @Nullable Material type;
     private long amount;
     private @Nullable CompoundTag tag;
     private final @Nullable UUID randomUUID;
 
     public StorageBox(@Nullable Material type, long amount) {
-        this(type, amount, true, null, null);
+        this(type, amount, true, false, false, null, null);
     }
 
     public StorageBox(@Nullable Material type, long amount, boolean autoCollect, @Nullable UUID randomUUID) {
-        this(type, amount, autoCollect, null, randomUUID);
+        this(type, amount, autoCollect, false, false, null, randomUUID);
     }
 
-    public StorageBox(@Nullable Material type, long amount, boolean autoCollect, @Nullable CompoundTag tag, @Nullable UUID randomUUID) {
+    public StorageBox(@Nullable Material type, long amount, boolean autoCollect, boolean autoBuy, boolean autoBuyConfigured, @Nullable CompoundTag tag, @Nullable UUID randomUUID) {
         this.type = type;
         this.amount = amount;
         this.autoCollect = autoCollect;
+        this.autoBuy = autoBuy;
+        this.autoBuyConfigured = autoBuyConfigured;
         this.tag = tag;
         this.randomUUID = randomUUID;
     }
@@ -61,13 +65,15 @@ public class StorageBox {
             Material type = Material.valueOf(s.isEmpty() || s.equals("null") ? "AIR" : s.toUpperCase());
             long amount = tag.getLong("storageBoxAmount").orElse(0L);
             boolean autoCollect = tag.getBoolean("storageBoxAutoCollect").orElse(false);
+            boolean autoBuyConfigured = tag.contains("storageBoxAutoBuy");
+            boolean autoBuy = tag.getBooleanOr("storageBoxAutoBuy", false);
             CompoundTag storageBoxTag = tag.getCompound("storageBoxTag").orElseGet(CompoundTag::new);
             if (storageBoxTag.contains("storageBoxAmount")) {
                 throw new IllegalArgumentException("StorageBox cannot contain StorageBox");
             }
             if (storageBoxTag.isEmpty()) storageBoxTag = null;
             UUID randomUUID = UUID.fromString(tag.getString("randomUUID").orElseGet(() -> UUID.randomUUID().toString()));
-            return new StorageBox(type, amount, autoCollect, storageBoxTag, randomUUID);
+            return new StorageBox(type, amount, autoCollect, autoBuy, autoBuyConfigured, storageBoxTag, randomUUID);
         } catch (RuntimeException e) {
             return null;
         }
@@ -88,7 +94,7 @@ public class StorageBox {
     public static @NotNull StorageBox wrapWithStorageBox(@NotNull ItemStack stack) {
         CompoundTag tag = ItemUtil.getCustomData(stack);
         if (tag != null && tag.isEmpty()) tag = null;
-        return new StorageBox(stack.getType(), stack.getAmount(), true, tag, null);
+        return new StorageBox(stack.getType(), stack.getAmount(), true, false, false, tag, null);
     }
 
     /**
@@ -104,11 +110,13 @@ public class StorageBox {
     }
 
     public @NotNull String getComponentItemStackName() {
-        if (type == null || type.isAir()) return "空";
+        if (type == null || type.isAir()) return "Unknown";
         ItemStack stack = getComponentItemStack();
         if (Objects.requireNonNull(stack).hasItemMeta() && Objects.requireNonNull(stack.getItemMeta()).hasDisplayName()) {
             return Objects.requireNonNull(stack.getItemMeta()).getDisplayName();
         }
+        String i18nName = StorageBoxPlugin.findTranslation(type);
+        if (i18nName != null) return i18nName;
         String name = type.name().replaceAll("_", " ").toLowerCase();
         return name.substring(0, 1).toUpperCase() + name.substring(1).toLowerCase();
     }
@@ -149,6 +157,7 @@ public class StorageBox {
         tag.putString("storageBoxType", this.type == null ? "null" : this.type.name());
         tag.putLong("storageBoxAmount", this.amount);
         tag.putBoolean("storageBoxAutoCollect", this.autoCollect);
+        tag.putBoolean("storageBoxAutoBuy", this.autoBuy);
         tag.putString("randomUUID", id);
         net.minecraft.world.item.ItemStack is = CraftItemStack.asNMSCopy(item);
         is.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
@@ -157,12 +166,12 @@ public class StorageBox {
         if (meta == null) {
             throw new RuntimeException("ItemMeta is null");
         }
-        meta.setDisplayName("§dStorage Box §e[§f" + getComponentItemStackName() + "§r§e] §7<" + this.amount + ">");
+        meta.setDisplayName(ChatColor.GREEN + "Storage Box " + ChatColor.YELLOW + "[" + ChatColor.WHITE + getComponentItemStackName() + ChatColor.YELLOW + "] " + ChatColor.GRAY + "<" + this.amount + ">");
         meta.setLore(Arrays.asList(
                 ChatColor.GRAY + "数: " + amount,
                 ChatColor.GRAY + "自動回収: " + autoCollect,
+                ChatColor.GRAY + "自動購入: " + autoBuy,
                 ChatColor.GRAY + "NBTタグ: " + (getTag() != null),
-                ChatColor.GRAY + "不透明: " + (itemType == Material.STICK) + " (" + itemType + ")",
                 ChatColor.GRAY + "ID: " + id
         ));
         if (type == null || type.isAir()) {
@@ -193,7 +202,7 @@ public class StorageBox {
     }
 
     /**
-     * Get material of this storage box.
+     * Get material in this storage box.
      * @return Null if undefined, material otherwise.
      */
     public @Nullable Material getType() {
@@ -233,6 +242,19 @@ public class StorageBox {
 
     public void setAutoCollect(boolean autoCollect) {
         this.autoCollect = autoCollect;
+    }
+
+    public boolean isAutoBuy() {
+        return autoBuy;
+    }
+
+    public void setAutoBuy(boolean autoBuy) {
+        this.autoBuy = autoBuy;
+        this.autoBuyConfigured = true;
+    }
+
+    public boolean isAutoBuyConfigured() {
+        return autoBuyConfigured;
     }
 
     public void importComponent(@NotNull ItemStack stack) {

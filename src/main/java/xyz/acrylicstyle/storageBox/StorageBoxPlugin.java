@@ -1,5 +1,10 @@
 package xyz.acrylicstyle.storageBox;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import net.md_5.bungee.api.ChatMessageType;
+import net.md_5.bungee.api.chat.TextComponent;
 import net.milkbowl.vault.economy.Economy;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
@@ -29,17 +34,21 @@ import org.bukkit.plugin.RegisteredServiceProvider;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import xyz.acrylicstyle.storageBox.gui.ShopScreen;
 import xyz.acrylicstyle.storageBox.listener.McMMOListener;
 import xyz.acrylicstyle.storageBox.network.ChannelUtil;
 import xyz.acrylicstyle.storageBox.utils.StorageBox;
 import xyz.acrylicstyle.storageBox.utils.StorageBoxUtils;
 
+import java.io.InputStreamReader;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
 
 public class StorageBoxPlugin extends JavaPlugin implements Listener {
+    private static final Gson GSON = new Gson();
+    public static JsonObject materialTranslations;
     public static Logger LOGGER;
     public static List<UUID> bypassingPlayers = new ArrayList<>();
     public static Integer customModelData = null;
@@ -87,6 +96,7 @@ public class StorageBoxPlugin extends JavaPlugin implements Listener {
     }
 
     private void loadPrices(@NotNull String path, @NotNull Map<ItemStack, Long> map) {
+        map.clear();
         ConfigurationSection section = getConfig().getConfigurationSection(path);
         if (section == null) return;
         for (String key : section.getKeys(false)) {
@@ -108,6 +118,34 @@ public class StorageBoxPlugin extends JavaPlugin implements Listener {
                 e.printStackTrace();
             }
         }
+    }
+
+    public long findBuyPrice(@NotNull ItemStack itemStack) {
+        return buyPrices.entrySet()
+                .stream()
+                .filter(e -> e.getKey().isSimilar(itemStack))
+                .findFirst()
+                .map(Map.Entry::getValue)
+                .orElse(0L);
+    }
+
+    public long getStorageBoxCreationPrice() {
+        long diamondPrice = findBuyPrice(new ItemStack(Material.DIAMOND));
+        long chestPrice = findBuyPrice(new ItemStack(Material.CHEST));
+        if (chestPrice > 0) {
+            return diamondPrice <= 0 ? 0 : diamondPrice * 8 + chestPrice;
+        }
+
+        long plankPrice = Arrays.stream(Material.values())
+                .filter(material -> material.name().endsWith("_PLANKS"))
+                .mapToLong(material -> findBuyPrice(new ItemStack(material)))
+                .filter(price -> price > 0)
+                .min()
+                .orElse(0L);
+        if (diamondPrice <= 0 || plankPrice <= 0) {
+            return 0;
+        }
+        return diamondPrice * 8 + plankPrice * 8;
     }
 
     @Override
@@ -158,10 +196,26 @@ public class StorageBoxPlugin extends JavaPlugin implements Listener {
         if (storageBox == null) {
             return;
         }
+        boolean autoBought = false;
         if (storageBox.isEmpty()) {
-            e.getPlayer().sendMessage(ChatColor.RED + "Storage Boxが空です。");
-            e.setCancelled(true);
-            return;
+            if (!storageBox.isAutoBuy()) {
+                e.getPlayer().sendMessage(ChatColor.RED + "Storage Boxが空です。");
+                e.setCancelled(true);
+                return;
+            }
+            long price = findBuyPrice(Objects.requireNonNull(storageBox.getComponentItemStack()));
+            if (price <= 0) {
+                e.getPlayer().sendMessage(ChatColor.RED + "このStorage Boxのアイテムは自動購入できません。");
+                e.setCancelled(true);
+                return;
+            }
+            if (!getEconomy().withdrawPlayer(e.getPlayer(), price).transactionSuccess()) {
+                e.getPlayer().sendMessage(ChatColor.RED + "お金が足りないので、自動購入できません。");
+                e.setCancelled(true);
+                return;
+            }
+            storageBox.setAmount(1);
+            autoBought = true;
         }
         BlockState placedState = e.getBlockPlaced().getState();
         e.setCancelled(true);
@@ -170,6 +224,9 @@ public class StorageBoxPlugin extends JavaPlugin implements Listener {
             e.getPlayer().getInventory().setItemInMainHand(storageBox.getItemStack());
         } else {
             e.getPlayer().getInventory().setItemInOffHand(storageBox.getItemStack());
+        }
+        if (autoBought) {
+            e.getPlayer().spigot().sendMessage(ChatMessageType.ACTION_BAR, new TextComponent(ChatColor.translateAlternateColorCodes('&', "&a&lStorage Boxのアイテムを自動購入して設置しました。")));
         }
         run(() -> {
             BlockPlaceEvent event = new BlockPlaceEvent(e.getBlockPlaced(), e.getBlockReplacedState(), e.getBlockAgainst(), e.getItemInHand(), e.getPlayer(), e.canBuild(), e.getHand());
@@ -283,5 +340,20 @@ public class StorageBoxPlugin extends JavaPlugin implements Listener {
     public static @NotNull Economy getEconomy() {
         RegisteredServiceProvider<Economy> provider = Bukkit.getServicesManager().getRegistration(Economy.class);
         return Objects.requireNonNull(provider).getProvider();
+    }
+
+    public static @NotNull JsonObject getMaterialTranslations() {
+        if (materialTranslations != null) return materialTranslations;
+        String filename = "ja_jp.json";
+        return materialTranslations = GSON.fromJson(new InputStreamReader(Objects.requireNonNull(StorageBoxPlugin.class.getResourceAsStream("/material_translations/" + filename))), JsonObject.class);
+    }
+
+    public static @Nullable String findTranslation(@NotNull Material material) {
+        JsonObject translations = getMaterialTranslations();
+        JsonElement element = translations.get("block.minecraft." + material.name().toLowerCase());
+        if (element == null) {
+            element = translations.get("item.minecraft." + material.name().toLowerCase());
+        }
+        return element.getAsString();
     }
 }
