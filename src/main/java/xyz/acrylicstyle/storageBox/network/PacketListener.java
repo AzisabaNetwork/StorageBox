@@ -45,7 +45,14 @@ public class PacketListener extends ChannelDuplexHandler {
             if (tag.contains("storageBoxTag") && tag.getCompound("storageBoxTag").orElseGet(CompoundTag::new).contains("CustomModelData")) {
                 tag.putInt("CustomModelData", tag.getCompound("storageBoxTag").orElseGet(CompoundTag::new).getInt("CustomModelData").orElse(0));
             }
-            Material material = Material.valueOf(tag.getString("storageBoxType").orElse("AIR").toUpperCase());
+
+            Material material;
+            try {
+                material = Material.valueOf(tag.getString("storageBoxType").orElse("AIR").toUpperCase());
+            } catch (IllegalArgumentException e) {
+                material = Material.AIR;
+            }
+
             if (material == Material.AIR) material = Material.BARRIER;
             item.setItem(CraftItemStack.asNMSCopy(new org.bukkit.inventory.ItemStack(material)).getItem());
         } catch (Exception e) {
