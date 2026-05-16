@@ -30,13 +30,16 @@ public class RootCommand implements CommandExecutor {
             }
             return true;
         }
+
         if (args.length == 0) {
             sendHelp(sender);
             return true;
         }
+
         List<String> argsList = new ArrayList<>(Arrays.asList(args));
         argsList.remove(0);
         String[] slicedArgs = argsList.toArray(new String[0]);
+
         if(args[0].equalsIgnoreCase("autobuy")) {
             AutoBuyCommand.onCommand(player);
         } else if (args[0].equalsIgnoreCase("autocollect")) {
@@ -63,7 +66,7 @@ public class RootCommand implements CommandExecutor {
             BuyCommand.onCommand(player, slicedArgs);
         } else if (args[0].equalsIgnoreCase("shop")) {
             ShopCommand.onCommand(player);
-        } if (args[0].equalsIgnoreCase("gomi")) {
+        } else if (args[0].equalsIgnoreCase("gomi")) {
             GomiCommand.onCommand(player, slicedArgs);
         }else if (args[0].equalsIgnoreCase("merge")) {
             MergeCommand.onCommand(player, slicedArgs);
