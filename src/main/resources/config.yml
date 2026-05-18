@@ -1,4 +1,7 @@
 custom-model-data: null
+extensions:
+  plant: true
+  eat: true
 storageBoxBuyPrice: 5000
 sellPrices:
   STONE: 1

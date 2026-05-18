@@ -24,6 +24,7 @@ import org.bukkit.event.inventory.CraftItemEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.event.inventory.PrepareItemCraftEvent;
+import org.bukkit.event.player.PlayerItemConsumeEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.Inventory;
@@ -246,6 +247,51 @@ public class StorageBoxPlugin extends JavaPlugin implements Listener {
                     ((Container) placedState).setCustomName(storageBox.getComponentItemStackDisplayName());
                 }
                 placedState.update(true, true);
+            }
+        });
+    }
+
+    @EventHandler(priority = EventPriority.LOW)
+    public void onPlayerItemConsume(PlayerItemConsumeEvent e) {
+        StorageBox storageBox = StorageBox.getStorageBox(e.getItem());
+        if (storageBox == null) return;
+        if (!getConfig().getBoolean("extensions.eat", false)) {
+            e.getPlayer().sendMessage(ChatColor.RED + "Storage Boxのアイテムを食べることはできません。");
+            e.setCancelled(true);
+            return;
+        }
+        boolean autoBought = false;
+        if (storageBox.isEmpty()) {
+            if (!storageBox.isAutoBuy()) {
+                e.getPlayer().sendMessage(ChatColor.RED + "Storage Boxが空です。");
+                e.setCancelled(true);
+                return;
+            }
+            long price = findBuyPrice(Objects.requireNonNull(storageBox.getComponentItemStack()));
+            if (price <= 0) {
+                e.getPlayer().sendMessage(ChatColor.RED + "このStorage Boxのアイテムは自動購入できません。");
+                e.setCancelled(true);
+                return;
+            }
+            if (!getEconomy().withdrawPlayer(e.getPlayer(), price).transactionSuccess()) {
+                e.getPlayer().sendMessage(ChatColor.RED + "お金が足りないので、自動購入できません。");
+                e.setCancelled(true);
+                return;
+            }
+            storageBox.setAmount(1);
+            autoBought = true;
+        }
+        storageBox.decreaseAmount();
+        if (autoBought) {
+            e.getPlayer().spigot().sendMessage(ChatMessageType.ACTION_BAR, new TextComponent(ChatColor.translateAlternateColorCodes('&', "&a&lStorage Boxのアイテムを自動購入して食べました。")));
+        }
+        boolean mainHand = e.getItem().equals(e.getPlayer().getInventory().getItemInMainHand());
+        ItemStack newBox = storageBox.getItemStack();
+        run(() -> {
+            if (mainHand) {
+                e.getPlayer().getInventory().setItemInMainHand(newBox);
+            } else {
+                e.getPlayer().getInventory().setItemInOffHand(newBox);
             }
         });
     }

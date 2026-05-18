@@ -135,7 +135,26 @@ public class StorageBox {
 
     public @NotNull ItemStack getItemStack() {
         Material itemType = getType() == null ? Material.BARRIER : getType();
-        if (!itemType.isBlock() && !opaqueExempt.contains(itemType)) {
+        boolean canPlant = false;
+        boolean canEat = false;
+        if (StorageBoxPlugin.getInstance() != null) {
+            canPlant = StorageBoxPlugin.getInstance().getConfig().getBoolean("extensions.plant", false);
+            canEat = StorageBoxPlugin.getInstance().getConfig().getBoolean("extensions.eat", false);
+        }
+        
+        Set<Material> allowedMaterials = new HashSet<>(opaqueExempt);
+        if (canPlant) {
+            allowedMaterials.addAll(Arrays.asList(
+                    Material.WHEAT_SEEDS, Material.BEETROOT_SEEDS, Material.MELON_SEEDS, Material.PUMPKIN_SEEDS,
+                    Material.POTATO, Material.CARROT, Material.SWEET_BERRIES, Material.BAMBOO, Material.COCOA_BEANS,
+                    Material.KELP, Material.SUGAR_CANE, Material.CACTUS, Material.NETHER_WART
+            ));
+        }
+        if (canEat && itemType.isEdible()) {
+            allowedMaterials.add(itemType);
+        }
+
+        if (!itemType.isBlock() && !allowedMaterials.contains(itemType)) {
             itemType = Material.STICK;
         }
         String id = randomUUID != null ? randomUUID.toString() : UUID.randomUUID().toString();
@@ -143,7 +162,7 @@ public class StorageBox {
         net.minecraft.server.v1_15_R1.ItemStack is = CraftItemStack.asNMSCopy(item);
         NBTTagCompound tag = is.getOrCreateTag();
         if (this.tag != null) {
-            tag.a(this.tag); // merge (for BlockState)
+            tag.a(this.tag);
             tag.set("storageBoxTag", this.tag.clone());
             tag.remove("MYTHIC_TYPE");
             tag.remove("AttributeModifiers");
