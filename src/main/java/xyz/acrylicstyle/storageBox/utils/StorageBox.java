@@ -105,7 +105,7 @@ public class StorageBox {
         ItemStack stack = new ItemStack(type == null ? Material.AIR : type);
         if (type == null || type.isAir() || tag == null) return stack;
         net.minecraft.world.item.ItemStack nms = CraftItemStack.asNMSCopy(stack);
-        nms.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
+        nms = ItemUtil.applyRawComponentsTag(nms, tag);
         return CraftItemStack.asBukkitCopy(nms);
     }
 
