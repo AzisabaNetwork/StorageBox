@@ -34,42 +34,92 @@ public class PacketListener extends ChannelDuplexHandler {
     @Override
     public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
         if (msg instanceof PacketPlayOutWindowItems) {
-            Field field = PacketPlayOutWindowItems.class.getDeclaredField("b");
-            field.setAccessible(true);
-            for (ItemStack item : (List<ItemStack>) field.get(msg)) {
-                rewriteItem(item);
-            }
+            msg = rewriteWindowItems((PacketPlayOutWindowItems) msg);
         } else if (msg instanceof PacketPlayOutEntityEquipment) {
-            Field field = PacketPlayOutEntityEquipment.class.getDeclaredField("c");
-            field.setAccessible(true);
-            rewriteItem((ItemStack) field.get(msg));
+            msg = rewriteEntityEquipment((PacketPlayOutEntityEquipment) msg);
         } else if (msg instanceof PacketPlayOutSetSlot) {
-            Field field = PacketPlayOutSetSlot.class.getDeclaredField("c");
-            field.setAccessible(true);
-            rewriteItem((ItemStack) field.get(msg));
+            msg = rewriteSetSlot((PacketPlayOutSetSlot) msg);
         }
         super.write(ctx, msg, promise);
     }
 
+    @SuppressWarnings("unchecked")
+    private static PacketPlayOutWindowItems rewriteWindowItems(PacketPlayOutWindowItems packet) throws ReflectiveOperationException {
+        Field itemsField = getField(PacketPlayOutWindowItems.class, "b");
+        List<ItemStack> items = (List<ItemStack>) itemsField.get(packet);
+        NonNullList<ItemStack> rewrittenItems = NonNullList.a(items.size(), ItemStack.a);
+        boolean rewritten = false;
+        for (int i = 0; i < items.size(); i++) {
+            ItemStack original = items.get(i);
+            ItemStack replacement = rewriteItem(original);
+            rewrittenItems.set(i, replacement);
+            rewritten |= replacement != original;
+        }
+        if (!rewritten) return packet;
+
+        Field windowIdField = getField(PacketPlayOutWindowItems.class, "a");
+        return new PacketPlayOutWindowItems(windowIdField.getInt(packet), rewrittenItems);
+    }
+
+    private static PacketPlayOutEntityEquipment rewriteEntityEquipment(PacketPlayOutEntityEquipment packet) throws ReflectiveOperationException {
+        Field itemField = getField(PacketPlayOutEntityEquipment.class, "c");
+        ItemStack original = (ItemStack) itemField.get(packet);
+        ItemStack replacement = rewriteItem(original);
+        if (replacement == original) return packet;
+
+        Field entityIdField = getField(PacketPlayOutEntityEquipment.class, "a");
+        Field slotField = getField(PacketPlayOutEntityEquipment.class, "b");
+        return new PacketPlayOutEntityEquipment(
+                entityIdField.getInt(packet),
+                (EnumItemSlot) slotField.get(packet),
+                replacement
+        );
+    }
+
+    private static PacketPlayOutSetSlot rewriteSetSlot(PacketPlayOutSetSlot packet) throws ReflectiveOperationException {
+        Field itemField = getField(PacketPlayOutSetSlot.class, "c");
+        ItemStack original = (ItemStack) itemField.get(packet);
+        ItemStack replacement = rewriteItem(original);
+        if (replacement == original) return packet;
+
+        Field windowIdField = getField(PacketPlayOutSetSlot.class, "a");
+        Field slotField = getField(PacketPlayOutSetSlot.class, "b");
+        return new PacketPlayOutSetSlot(
+                windowIdField.getInt(packet),
+                slotField.getInt(packet),
+                replacement
+        );
+    }
+
+    private static Field getField(Class<?> type, String name) throws NoSuchFieldException {
+        Field field = type.getDeclaredField(name);
+        field.setAccessible(true);
+        return field;
+    }
+
     @SuppressWarnings("deprecation")
-    private static void rewriteItem(ItemStack item) {
-        if (item == null) return;
+    private static ItemStack rewriteItem(ItemStack item) {
+        if (item == null) return null;
         NBTTagCompound tag = item.getTag();
-        if (tag == null) return;
+        if (tag == null) return item;
         try {
             if (!tag.hasKey("storageBoxType") ||
                     tag.getString("storageBoxType").isEmpty() ||
                     tag.getString("storageBoxType").equals("null")) {
-                return;
+                return item;
             }
-            if (tag.hasKey("storageBoxTag") && tag.getCompound("storageBoxTag").hasKey("CustomModelData")) {
-                tag.setInt("CustomModelData", tag.getCompound("storageBoxTag").getInt("CustomModelData"));
+            ItemStack rewritten = item.cloneItemStack();
+            NBTTagCompound rewrittenTag = rewritten.getTag();
+            if (rewrittenTag.hasKey("storageBoxTag") && rewrittenTag.getCompound("storageBoxTag").hasKey("CustomModelData")) {
+                rewrittenTag.setInt("CustomModelData", rewrittenTag.getCompound("storageBoxTag").getInt("CustomModelData"));
             }
-            Material material = Material.valueOf(tag.getString("storageBoxType"));
+            Material material = Material.valueOf(rewrittenTag.getString("storageBoxType"));
             if (material == Material.AIR) material = Material.BARRIER;
-            item.setItem(CraftItemStack.asNMSCopy(new org.bukkit.inventory.ItemStack(material)).getItem());
+            rewritten.setItem(CraftItemStack.asNMSCopy(new org.bukkit.inventory.ItemStack(material)).getItem());
+            return rewritten;
         } catch (Exception e) {
             e.printStackTrace();
+            return item;
         }
     }
 }
