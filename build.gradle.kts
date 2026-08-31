@@ -7,8 +7,7 @@ plugins {
 }
 
 group = "xyz.acrylicstyle"
-version = "1.6.3+1.15.2"
-
+version = "1.6.3"
 java {
     toolchain.languageVersion.set(JavaLanguageVersion.of(8))
     withSourcesJar()
@@ -40,11 +39,16 @@ repositories {
         name = "jitpack"
         url = uri("https://jitpack.io/")
     }
+    maven {
+        name = "codemc"
+        url = uri("https://repo.codemc.io/repository/maven-releases/")
+    }
     mavenLocal()
 }
 
 dependencies {
-    compileOnly("org.spigotmc:spigot:1.15.2-R0.1-SNAPSHOT")
+    compileOnly("org.spigotmc:spigot-api:1.15.2-R0.1-SNAPSHOT")
+    compileOnly("com.github.retrooper:packetevents-spigot:2.7.0")
     compileOnly("com.gmail.nossr50.mcMMO:mcMMO:2.1.196")
     compileOnly("com.sk89q.worldguard:worldguard-bukkit:7.0.0") {
         exclude(group = "org.bstats", module = "bstats-bukkit")
@@ -94,7 +98,10 @@ tasks {
         doNotTrackState("plugin.yml should be updated every time")
         duplicatesStrategy = DuplicatesStrategy.INCLUDE
         filesMatching("**/plugin.yml") {
-            expand("version" to project.version.toString())
+            expand(
+                "version" to project.version.toString(),
+                "project" to mapOf("version" to project.version.toString())
+            )
         }
     }
 }

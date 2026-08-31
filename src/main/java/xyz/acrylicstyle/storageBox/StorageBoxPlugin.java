@@ -1,18 +1,21 @@
 package xyz.acrylicstyle.storageBox;
 
+import com.github.retrooper.packetevents.PacketEvents;
+import com.github.retrooper.packetevents.protocol.nbt.NBTCompound;
+import com.github.retrooper.packetevents.protocol.nbt.codec.NBTCodec;
+import io.github.retrooper.packetevents.factory.spigot.SpigotPacketEventsBuilder;
+import io.github.retrooper.packetevents.util.SpigotConversionUtil;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import net.md_5.bungee.api.ChatMessageType;
 import net.md_5.bungee.api.chat.TextComponent;
 import net.milkbowl.vault.economy.Economy;
-import net.minecraft.server.v1_15_R1.MojangsonParser;
-import net.minecraft.server.v1_15_R1.NBTTagCompound;
 import org.bukkit.*;
 import org.bukkit.block.BlockState;
 import org.bukkit.block.Container;
 import org.bukkit.configuration.ConfigurationSection;
-import org.bukkit.craftbukkit.v1_15_R1.inventory.CraftItemStack;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -38,7 +41,7 @@ import org.jetbrains.annotations.Nullable;
 import xyz.acrylicstyle.storageBox.gui.ShopScreen;
 import xyz.acrylicstyle.storageBox.listener.McMMOListener;
 import xyz.acrylicstyle.storageBox.listener.MyPetListener;
-import xyz.acrylicstyle.storageBox.network.ChannelUtil;
+import xyz.acrylicstyle.storageBox.network.PacketListener;
 import xyz.acrylicstyle.storageBox.utils.StorageBox;
 import xyz.acrylicstyle.storageBox.utils.StorageBoxUtils;
 
@@ -55,6 +58,14 @@ public class StorageBoxPlugin extends JavaPlugin implements Listener {
     public static Integer customModelData = null;
     public final Map<ItemStack, Long> buyPrices = new ConcurrentHashMap<>();
     public final Map<ItemStack, Long> sellPrices = new ConcurrentHashMap<>();
+
+    @Override
+    public void onLoad() {
+        if (!PacketEvents.getAPI().isLoaded()) {
+            PacketEvents.setAPI(SpigotPacketEventsBuilder.build(this));
+            PacketEvents.getAPI().load();
+        }
+    }
 
     @Override
     public void onEnable() {
@@ -82,9 +93,10 @@ public class StorageBoxPlugin extends JavaPlugin implements Listener {
             }
         }
 
-        for (Player player : Bukkit.getOnlinePlayers()) {
-            ChannelUtil.inject(this, player);
+        if (!PacketEvents.getAPI().isInitialized()) {
+            PacketEvents.getAPI().init();
         }
+        PacketEvents.getAPI().getEventManager().registerListener(new PacketListener());
 
         // delay init
         Bukkit.getScheduler().runTask(this, () -> {
@@ -113,11 +125,17 @@ public class StorageBoxPlugin extends JavaPlugin implements Listener {
                 } else {
                     String material = key.substring(0, bracketLocation);
                     String snbt = key.substring(bracketLocation);
-                    NBTTagCompound tag = MojangsonParser.parse(snbt);
+                    JsonElement jsonElement = new JsonParser().parse(snbt);
+                    NBTCompound tag = (NBTCompound) NBTCodec.jsonToNBT(jsonElement);
                     ItemStack stack = new ItemStack(Material.valueOf(material.toUpperCase()));
-                    net.minecraft.server.v1_15_R1.ItemStack nms = CraftItemStack.asNMSCopy(stack);
-                    nms.setTag(tag);
-                    map.put(CraftItemStack.asBukkitCopy(nms), section.getLong(key));
+                    com.github.retrooper.packetevents.protocol.item.ItemStack peItem = SpigotConversionUtil.fromBukkitItemStack(stack);
+                    if (peItem != null) {
+                        peItem.setNBT(tag);
+                        ItemStack converted = SpigotConversionUtil.toBukkitItemStack(peItem);
+                        if (converted != null) {
+                            map.put(converted, section.getLong(key));
+                        }
+                    }
                 }
             } catch (Exception e) {
                 getLogger().info("Failed to load " + path + "." + key);
@@ -156,8 +174,8 @@ public class StorageBoxPlugin extends JavaPlugin implements Listener {
 
     @Override
     public void onDisable() {
-        for (Player player : Bukkit.getOnlinePlayers()) {
-            ChannelUtil.eject(player);
+        if (PacketEvents.getAPI().isInitialized()) {
+            PacketEvents.getAPI().terminate();
         }
     }
 
@@ -175,7 +193,6 @@ public class StorageBoxPlugin extends JavaPlugin implements Listener {
 
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent e) {
-        ChannelUtil.inject(this, e.getPlayer());
         Bukkit.getScheduler().runTaskLater(this, () -> {
             if (e.getPlayer().isOnline()) {
                 Inventory inventory = e.getPlayer().getInventory();

@@ -1,10 +1,11 @@
 main: xyz.acrylicstyle.storageBox.StorageBoxPlugin
 name: StorageBox
-version: 1.15+1.6.0
+version: ${version}
 api-version: 1.15
 author: acrylic-style
 depend:
   - Vault
+  - packetevents
 softdepend:
   - mcMMO
   - MyPet

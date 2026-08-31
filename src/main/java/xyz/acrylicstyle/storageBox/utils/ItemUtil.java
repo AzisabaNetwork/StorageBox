@@ -1,5 +1,7 @@
 package xyz.acrylicstyle.storageBox.utils;
 
+import io.github.retrooper.packetevents.util.SpigotConversionUtil;
+import com.github.retrooper.packetevents.protocol.nbt.NBTCompound;
 import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
@@ -22,9 +24,11 @@ public class ItemUtil {
 
     public static @NotNull String getStringTag(@NotNull ItemStack item, @NotNull String key) {
         if (item.getType().isAir()) return "";
-        net.minecraft.server.v1_15_R1.ItemStack nms = org.bukkit.craftbukkit.v1_15_R1.inventory.CraftItemStack.asNMSCopy(item);
-        net.minecraft.server.v1_15_R1.NBTTagCompound tag = nms.getTag();
+        com.github.retrooper.packetevents.protocol.item.ItemStack peItem = SpigotConversionUtil.fromBukkitItemStack(item);
+        if (peItem == null) return "";
+        NBTCompound tag = peItem.getNBT();
         if (tag == null) return "";
-        return tag.getString(key);
+        String value = tag.getStringTagValueOrNull(key);
+        return value != null ? value : "";
     }
 }

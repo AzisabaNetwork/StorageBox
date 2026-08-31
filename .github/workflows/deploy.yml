@@ -30,6 +30,6 @@ jobs:
         run: mvn -B package --file pom.xml
       - name: Prepare settings.xml
         run: |
-          echo "<settings><servers><server><id>acrylic-repo</id><username>${{ secrets.REPO_USERNAME }}</username><password>${{ secrets.REPO_PASSWORD }}</password></server></servers></settings>" > $HOME/.m2/settings.xml
+          echo "<settings><servers><server><id>acrylic-repo</id><username>${{ secrets.NEWREPO_USERNAME }}</username><password>${{ secrets.NEWREPO_PASSWORD }}</password></server></servers></settings>" > $HOME/.m2/settings.xml
       - name: Deploy
         run: mvn deploy
