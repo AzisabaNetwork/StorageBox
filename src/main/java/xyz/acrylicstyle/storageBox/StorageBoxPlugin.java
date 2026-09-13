@@ -1,6 +1,7 @@
 package xyz.acrylicstyle.storageBox;
 
 import com.github.retrooper.packetevents.PacketEvents;
+import com.github.retrooper.packetevents.protocol.component.ComponentTypes;
 import com.github.retrooper.packetevents.protocol.nbt.NBTCompound;
 import com.github.retrooper.packetevents.protocol.nbt.codec.NBTCodec;
 import com.google.gson.Gson;
@@ -131,6 +132,9 @@ public class StorageBoxPlugin extends JavaPlugin implements Listener {
                     com.github.retrooper.packetevents.protocol.item.ItemStack peItem = SpigotConversionUtil.fromBukkitItemStack(stack);
                     if (peItem != null) {
                         peItem.setNBT(tag);
+                        try {
+                            peItem.setComponent(ComponentTypes.CUSTOM_DATA, tag.copy());
+                        } catch (Throwable ignored) {}
                         ItemStack converted = SpigotConversionUtil.toBukkitItemStack(peItem);
                         if (converted != null) {
                             map.put(converted, section.getLong(key));

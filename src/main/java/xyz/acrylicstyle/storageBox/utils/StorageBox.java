@@ -1,5 +1,6 @@
 package xyz.acrylicstyle.storageBox.utils;
 
+import com.github.retrooper.packetevents.protocol.component.ComponentTypes;
 import com.github.retrooper.packetevents.protocol.nbt.*;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -111,8 +112,16 @@ public class StorageBox {
 
                         NBTCompound storageBoxTag = null;
                         com.github.retrooper.packetevents.protocol.item.ItemStack peItem = SpigotConversionUtil.fromBukkitItemStack(itemStack);
-                        if (peItem != null && peItem.getNBT() != null) {
-                            storageBoxTag = extractStorageBoxTag(peItem.getNBT());
+                        if (peItem != null) {
+                            NBTCompound peNBT = peItem.getNBT();
+                            if (peNBT == null) {
+                                try {
+                                    peNBT = peItem.getComponentOr(ComponentTypes.CUSTOM_DATA, null);
+                                } catch (Throwable ignored) {}
+                            }
+                            if (peNBT != null) {
+                                storageBoxTag = extractStorageBoxTag(peNBT);
+                            }
                         }
 
                         return new StorageBox(type, amount, autoCollect, autoBuy, autoBuyConfigured, storageBoxTag, serializedComponent, randomUUID);
@@ -123,6 +132,11 @@ public class StorageBox {
             com.github.retrooper.packetevents.protocol.item.ItemStack peItem = SpigotConversionUtil.fromBukkitItemStack(itemStack);
             if (peItem == null) return null;
             NBTCompound tag = peItem.getNBT();
+            if (tag == null) {
+                try {
+                    tag = peItem.getComponentOr(ComponentTypes.CUSTOM_DATA, null);
+                } catch (Throwable ignored) {}
+            }
             if (tag == null) return null;
 
             NBTCompound rootTag = tag;
@@ -200,7 +214,15 @@ public class StorageBox {
 
     public static @NotNull StorageBox wrapWithStorageBox(@NotNull ItemStack stack) {
         com.github.retrooper.packetevents.protocol.item.ItemStack peItem = SpigotConversionUtil.fromBukkitItemStack(stack);
-        NBTCompound tag = peItem != null ? peItem.getNBT() : null;
+        NBTCompound tag = null;
+        if (peItem != null) {
+            tag = peItem.getNBT();
+            if (tag == null) {
+                try {
+                    tag = peItem.getComponentOr(ComponentTypes.CUSTOM_DATA, null);
+                } catch (Throwable ignored) {}
+            }
+        }
         if (tag != null && tag.isEmpty()) tag = null;
         String serialized = serializeItemStack(stack);
         return new StorageBox(stack.getType(), stack.getAmount(), true, false, false, tag != null ? tag.copy() : null, serialized, null);
@@ -228,6 +250,9 @@ public class StorageBox {
         com.github.retrooper.packetevents.protocol.item.ItemStack peItem = SpigotConversionUtil.fromBukkitItemStack(stack);
         if (peItem != null) {
             peItem.setNBT(tag.copy());
+            try {
+                peItem.setComponent(ComponentTypes.CUSTOM_DATA, tag.copy());
+            } catch (Throwable ignored) {}
             ItemStack converted = SpigotConversionUtil.toBukkitItemStack(peItem);
             if (converted != null) stack = converted;
         }
@@ -359,7 +384,16 @@ public class StorageBox {
         String id = randomUUID != null ? randomUUID.toString() : UUID.randomUUID().toString();
         ItemStack item = new ItemStack(itemType);
         com.github.retrooper.packetevents.protocol.item.ItemStack peItem = SpigotConversionUtil.fromBukkitItemStack(item);
-        NBTCompound tag = (peItem != null && peItem.getNBT() != null) ? peItem.getNBT().copy() : new NBTCompound();
+        NBTCompound tag = null;
+        if (peItem != null) {
+            tag = peItem.getNBT();
+            if (tag == null) {
+                try {
+                    tag = peItem.getComponentOr(ComponentTypes.CUSTOM_DATA, null);
+                } catch (Throwable ignored) {}
+            }
+        }
+        tag = (tag != null) ? tag.copy() : new NBTCompound();
 
         if (this.tag != null) {
             tag.setTag("storageBoxTag", this.tag.copy());
@@ -373,6 +407,9 @@ public class StorageBox {
 
         if (peItem != null) {
             peItem.setNBT(tag);
+            try {
+                peItem.setComponent(ComponentTypes.CUSTOM_DATA, tag.copy());
+            } catch (Throwable ignored) {}
             ItemStack converted = SpigotConversionUtil.toBukkitItemStack(peItem);
             if (converted != null) {
                 item = converted;
@@ -508,7 +545,15 @@ public class StorageBox {
 
     public void importComponent(@NotNull ItemStack stack) {
         com.github.retrooper.packetevents.protocol.item.ItemStack peItem = SpigotConversionUtil.fromBukkitItemStack(stack);
-        NBTCompound tag = peItem != null ? peItem.getNBT() : null;
+        NBTCompound tag = null;
+        if (peItem != null) {
+            tag = peItem.getNBT();
+            if (tag == null) {
+                try {
+                    tag = peItem.getComponentOr(ComponentTypes.CUSTOM_DATA, null);
+                } catch (Throwable ignored) {}
+            }
+        }
         if (tag != null && tag.isEmpty()) tag = null;
         this.setTag(tag != null ? tag.copy() : null);
         this.serializedComponent = serializeItemStack(stack);

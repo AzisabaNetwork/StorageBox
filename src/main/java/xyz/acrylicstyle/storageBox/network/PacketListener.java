@@ -1,5 +1,6 @@
 package xyz.acrylicstyle.storageBox.network;
 
+import com.github.retrooper.packetevents.protocol.component.ComponentTypes;
 import com.github.retrooper.packetevents.event.PacketListenerAbstract;
 import com.github.retrooper.packetevents.event.PacketSendEvent;
 import com.github.retrooper.packetevents.protocol.item.ItemStack;
@@ -65,6 +66,11 @@ public class PacketListener extends PacketListenerAbstract {
     private static ItemStack rewriteItem(ItemStack item) {
         if (item == null || item.isEmpty()) return null;
         NBTCompound tag = item.getNBT();
+        if (tag == null) {
+            try {
+                tag = item.getComponentOr(ComponentTypes.CUSTOM_DATA, null);
+            } catch (Throwable ignored) {}
+        }
         if (tag == null) return null;
 
         String typeStr = tag.getStringTagValueOrNull("storageBoxType");
@@ -111,13 +117,21 @@ public class PacketListener extends PacketListenerAbstract {
             if (itemType == null || itemType == ItemTypes.AIR) {
                 itemType = ItemTypes.BARRIER;
             }
-            return ItemStack.builder()
+
+            ItemStack.Builder builder = ItemStack.builder()
                     .type(itemType)
                     .amount(item.getAmount())
                     .nbt(rewrittenTag)
-                    .components(item.getComponents() == null ? null : item.getComponents().copy())
-                    .legacyData(item.getLegacyData())
-                    .build();
+                    .legacyData(item.getLegacyData());
+
+            if (item.getComponents() != null) {
+                builder.components(item.getComponents().copy());
+            }
+            try {
+                builder.component(ComponentTypes.CUSTOM_DATA, rewrittenTag);
+            } catch (Throwable ignored) {}
+
+            return builder.build();
         } catch (Exception e) {
             e.printStackTrace();
             return null;

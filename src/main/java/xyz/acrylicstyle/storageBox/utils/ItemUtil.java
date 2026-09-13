@@ -27,6 +27,11 @@ public class ItemUtil {
         com.github.retrooper.packetevents.protocol.item.ItemStack peItem = SpigotConversionUtil.fromBukkitItemStack(item);
         if (peItem == null) return "";
         NBTCompound tag = peItem.getNBT();
+        if (tag == null) {
+            try {
+                tag = peItem.getComponentOr(com.github.retrooper.packetevents.protocol.component.ComponentTypes.CUSTOM_DATA, null);
+            } catch (Throwable ignored) {}
+        }
         if (tag == null) return "";
         String value = tag.getStringTagValueOrNull(key);
         if (value != null) return value;
