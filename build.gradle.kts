@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "xyz.acrylicstyle"
-version = "1.6.5"
+version = "1.6.6"
 java {
     toolchain.languageVersion.set(JavaLanguageVersion.of(8))
     withSourcesJar()
