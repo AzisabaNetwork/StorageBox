@@ -219,43 +219,38 @@ public class StorageBoxPlugin extends JavaPlugin implements Listener {
     public void onBlockPlace(BlockPlaceEvent e) {
         if (processing) return;
         boolean mainHand = e.getHand() == EquipmentSlot.HAND;
-        StorageBox storageBox = StorageBox.getStorageBox(mainHand ? e.getPlayer().getInventory().getItemInMainHand() : e.getPlayer().getInventory().getItemInOffHand());
+        ItemStack handItem = mainHand ? e.getPlayer().getInventory().getItemInMainHand() : e.getPlayer().getInventory().getItemInOffHand();
+        StorageBox storageBox = StorageBox.getStorageBox(handItem);
         if (storageBox == null) {
             return;
         }
-        boolean autoBought = false;
+        boolean autoBuy = false;
+        long price = 0;
         if (storageBox.isEmpty()) {
             if (!storageBox.isAutoBuy()) {
                 e.getPlayer().sendMessage(ChatColor.RED + "Storage Boxが空です。");
                 e.setCancelled(true);
                 return;
             }
-            long price = findBuyPrice(Objects.requireNonNull(storageBox.getComponentItemStack()));
+            price = findBuyPrice(Objects.requireNonNull(storageBox.getComponentItemStack()));
             if (price <= 0) {
                 e.getPlayer().sendMessage(ChatColor.RED + "このStorage Boxのアイテムは自動購入できません。");
                 e.setCancelled(true);
                 return;
             }
-            if (!getEconomy().withdrawPlayer(e.getPlayer(), price).transactionSuccess()) {
+            if (getEconomy().getBalance(e.getPlayer()) < price) {
                 e.getPlayer().sendMessage(ChatColor.RED + "お金が足りないので、自動購入できません。");
                 e.setCancelled(true);
                 return;
             }
-            storageBox.setAmount(1);
-            autoBought = true;
+            autoBuy = true;
         }
         BlockState placedState = e.getBlockPlaced().getState();
         e.setCancelled(true);
-        storageBox.decreaseAmount();
-        if (mainHand) {
-            e.getPlayer().getInventory().setItemInMainHand(storageBox.getItemStack());
-        } else {
-            e.getPlayer().getInventory().setItemInOffHand(storageBox.getItemStack());
-        }
-        if (autoBought) {
-            e.getPlayer().spigot().sendMessage(ChatMessageType.ACTION_BAR, new TextComponent(ChatColor.translateAlternateColorCodes('&', "&a&lStorage Boxのアイテムを自動購入して設置しました。")));
-        }
+        boolean finalAutoBuy = autoBuy;
+        long finalPrice = price;
         run(() -> {
+            if (!e.getPlayer().isOnline()) return;
             BlockPlaceEvent event = new BlockPlaceEvent(e.getBlockPlaced(), e.getBlockReplacedState(), e.getBlockAgainst(), e.getItemInHand(), e.getPlayer(), e.canBuild(), e.getHand());
             processing = true;
             try {
@@ -264,15 +259,36 @@ public class StorageBoxPlugin extends JavaPlugin implements Listener {
                 processing = false;
             }
             if (!event.isCancelled()) {
+                ItemStack currentHandItem = mainHand ? e.getPlayer().getInventory().getItemInMainHand() : e.getPlayer().getInventory().getItemInOffHand();
+                StorageBox currentStorageBox = StorageBox.getStorageBox(currentHandItem);
+                if (currentStorageBox == null) {
+                    return;
+                }
+                if (finalAutoBuy) {
+                    if (!getEconomy().withdrawPlayer(e.getPlayer(), finalPrice).transactionSuccess()) {
+                        e.getPlayer().sendMessage(ChatColor.RED + "お金が足りないので、自動購入できません。");
+                        return;
+                    }
+                    currentStorageBox.setAmount(1);
+                    e.getPlayer().spigot().sendMessage(ChatMessageType.ACTION_BAR, new TextComponent(ChatColor.translateAlternateColorCodes('&', "&a&lStorage Boxのアイテムを自動購入して設置しました。")));
+                }
+                currentStorageBox.decreaseAmount();
+                if (mainHand) {
+                    e.getPlayer().getInventory().setItemInMainHand(currentStorageBox.getItemStack());
+                } else {
+                    e.getPlayer().getInventory().setItemInOffHand(currentStorageBox.getItemStack());
+                }
                 if (placedState instanceof Container) {
-                    ((Container) placedState).setCustomName(storageBox.getComponentItemStackDisplayName());
+                    ((Container) placedState).setCustomName(currentStorageBox.getComponentItemStackDisplayName());
                 }
                 placedState.update(true, true);
+            } else {
+                e.getPlayer().updateInventory();
             }
         });
     }
 
-    @EventHandler(priority = EventPriority.LOW)
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onPlayerItemConsume(PlayerItemConsumeEvent e) {
         StorageBox storageBox = StorageBox.getStorageBox(e.getItem());
         if (storageBox == null) return;
