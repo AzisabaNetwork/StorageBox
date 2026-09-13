@@ -115,6 +115,8 @@ public class PacketListener extends PacketListenerAbstract {
                     .type(itemType)
                     .amount(item.getAmount())
                     .nbt(rewrittenTag)
+                    .components(item.getComponents() == null ? null : item.getComponents().copy())
+                    .legacyData(item.getLegacyData())
                     .build();
         } catch (Exception e) {
             e.printStackTrace();

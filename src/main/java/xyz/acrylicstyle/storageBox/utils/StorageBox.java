@@ -146,6 +146,21 @@ public class StorageBox {
             if (amountNBT instanceof NBTNumber) {
                 amount = ((NBTNumber) amountNBT).getAsLong();
             }
+            if (amount <= 0 && itemStack.hasItemMeta() && itemStack.getItemMeta() != null && itemStack.getItemMeta().hasDisplayName()) {
+                String name = ChatColor.stripColor(itemStack.getItemMeta().getDisplayName());
+                if (name != null) {
+                    int lastLt = name.lastIndexOf('<');
+                    int lastGt = name.lastIndexOf('>');
+                    if (lastLt != -1 && lastGt != -1 && lastGt > lastLt) {
+                        try {
+                            long parsed = Long.parseLong(name.substring(lastLt + 1, lastGt).trim());
+                            if (parsed > 0) {
+                                amount = parsed;
+                            }
+                        } catch (NumberFormatException ignored) {}
+                    }
+                }
+            }
 
             boolean autoCollect = true;
             NBT autoCollectNBT = rootTag.getTagOrNull("storageBoxAutoCollect");
@@ -280,8 +295,22 @@ public class StorageBox {
     public @NotNull String getComponentItemStackName() {
         if (type == null || type.isAir()) return "Unknown";
         ItemStack stack = getComponentItemStack();
-        if (Objects.requireNonNull(stack).hasItemMeta() && Objects.requireNonNull(stack.getItemMeta()).hasDisplayName()) {
-            return Objects.requireNonNull(stack.getItemMeta()).getDisplayName();
+        if (stack != null && stack.hasItemMeta() && stack.getItemMeta() != null && stack.getItemMeta().hasDisplayName()) {
+            String displayName = stack.getItemMeta().getDisplayName();
+            String stripped = ChatColor.stripColor(displayName);
+            if (stripped != null && !stripped.startsWith("Storage Box")) {
+                return displayName;
+            }
+            if (displayName != null) {
+                int start = displayName.indexOf('[');
+                int end = displayName.lastIndexOf(']');
+                if (start != -1 && end != -1 && end > start) {
+                    String inner = displayName.substring(start + 1, end).trim();
+                    if (!inner.isEmpty() && !ChatColor.stripColor(inner).startsWith("Storage Box")) {
+                        return inner;
+                    }
+                }
+            }
         }
         String i18nName = StorageBoxPlugin.findTranslation(type);
         if (i18nName != null) return i18nName;
@@ -335,6 +364,7 @@ public class StorageBox {
         if (this.tag != null) {
             tag.setTag("storageBoxTag", this.tag.copy());
         }
+        tag.removeTag("display");
         tag.setTag("storageBoxType", new NBTString(this.type == null ? "null" : this.type.name()));
         tag.setTag("storageBoxAmount", new NBTLong(this.amount));
         tag.setTag("storageBoxAutoCollect", new NBTByte((byte) (this.autoCollect ? 1 : 0)));
@@ -516,7 +546,9 @@ public class StorageBox {
             throw new IllegalArgumentException("StorageBox cannot contain StorageBox");
         }
         if (storageBoxTag != null && !storageBoxTag.isEmpty()) {
-            return storageBoxTag.copy();
+            NBTCompound copy = storageBoxTag.copy();
+            cleanStorageBoxDisplayName(copy);
+            return copy;
         }
         if (tag.getTagOrNull("display") != null || tag.getTagOrNull("Enchantments") != null || tag.getTagOrNull("soulbound") != null) {
             NBTCompound copy = tag.copy();
@@ -526,9 +558,23 @@ public class StorageBox {
             copy.removeTag("storageBoxAutoBuy");
             copy.removeTag("randomUUID");
             copy.removeTag("PublicBukkitValues");
+            cleanStorageBoxDisplayName(copy);
             if (!copy.isEmpty()) return copy;
         }
         return null;
+    }
+
+    private static void cleanStorageBoxDisplayName(@NotNull NBTCompound tag) {
+        NBTCompound display = tag.getCompoundTagOrNull("display");
+        if (display != null) {
+            String name = display.getStringTagValueOrNull("Name");
+            if (name != null) {
+                String stripped = ChatColor.stripColor(parseLegacyOrJsonText(name));
+                if (stripped != null && stripped.startsWith("Storage Box")) {
+                    tag.removeTag("display");
+                }
+            }
+        }
     }
 
     @SuppressWarnings("deprecation")
