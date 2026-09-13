@@ -1,14 +1,21 @@
 package xyz.acrylicstyle.storageBox.utils;
 
-import com.github.retrooper.packetevents.protocol.item.type.ItemTypes;
 import com.github.retrooper.packetevents.protocol.nbt.*;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import io.github.retrooper.packetevents.util.SpigotConversionUtil;
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.inventory.ItemFlag;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.Damageable;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.persistence.PersistentDataContainer;
+import org.bukkit.persistence.PersistentDataType;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import xyz.acrylicstyle.storageBox.StorageBoxPlugin;
@@ -17,6 +24,19 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 public class StorageBox {
+    @SuppressWarnings("deprecation")
+    public static final NamespacedKey KEY_TYPE = new NamespacedKey("storagebox", "type");
+    @SuppressWarnings("deprecation")
+    public static final NamespacedKey KEY_AMOUNT = new NamespacedKey("storagebox", "amount");
+    @SuppressWarnings("deprecation")
+    public static final NamespacedKey KEY_AUTO_COLLECT = new NamespacedKey("storagebox", "autocollect");
+    @SuppressWarnings("deprecation")
+    public static final NamespacedKey KEY_AUTO_BUY = new NamespacedKey("storagebox", "autobuy");
+    @SuppressWarnings("deprecation")
+    public static final NamespacedKey KEY_UUID = new NamespacedKey("storagebox", "uuid");
+    @SuppressWarnings("deprecation")
+    public static final NamespacedKey KEY_COMPONENT_DATA = new NamespacedKey("storagebox", "component_data");
+
     private static final Set<Material> opaqueExempt = new HashSet<>(Arrays.asList(
             Material.COAL, Material.CHARCOAL, Material.DIAMOND, Material.EMERALD, Material.STICK, Material.DEBUG_STICK,
             Material.SUGAR, Material.STRING, Material.LAPIS_LAZULI, Material.WHEAT_SEEDS, Material.REDSTONE,
@@ -34,66 +54,118 @@ public class StorageBox {
     private @Nullable Material type;
     private long amount;
     private @Nullable NBTCompound tag;
+    private @Nullable String serializedComponent;
     private final @Nullable UUID randomUUID;
 
     public StorageBox(@Nullable Material type, long amount) {
-        this(type, amount, true, false, false, null, null);
+        this(type, amount, true, false, false, null, null, null);
     }
 
     public StorageBox(@Nullable Material type, long amount, boolean autoCollect, @Nullable UUID randomUUID) {
-        this(type, amount, autoCollect, false, false, null, randomUUID);
+        this(type, amount, autoCollect, false, false, null, null, randomUUID);
     }
 
     public StorageBox(@Nullable Material type, long amount, boolean autoCollect, boolean autoBuy, boolean autoBuyConfigured, @Nullable NBTCompound tag, @Nullable UUID randomUUID) {
+        this(type, amount, autoCollect, autoBuy, autoBuyConfigured, tag, null, randomUUID);
+    }
+
+    public StorageBox(@Nullable Material type, long amount, boolean autoCollect, boolean autoBuy, boolean autoBuyConfigured, @Nullable NBTCompound tag, @Nullable String serializedComponent, @Nullable UUID randomUUID) {
         this.type = type;
         this.amount = amount;
         this.autoCollect = autoCollect;
         this.autoBuy = autoBuy;
         this.autoBuyConfigured = autoBuyConfigured;
         this.tag = tag;
+        this.serializedComponent = serializedComponent;
         this.randomUUID = randomUUID;
     }
 
     public static @Nullable StorageBox getStorageBox(@NotNull ItemStack itemStack) {
         try {
+            if (itemStack.getType().isAir()) return null;
+            if (itemStack.hasItemMeta()) {
+                ItemMeta meta = itemStack.getItemMeta();
+                if (meta != null) {
+                    PersistentDataContainer pdc = meta.getPersistentDataContainer();
+                    if (pdc.has(KEY_TYPE, PersistentDataType.STRING)) {
+                        String s = pdc.get(KEY_TYPE, PersistentDataType.STRING);
+                        Material type = Material.valueOf(s == null || s.isEmpty() || s.equalsIgnoreCase("null") ? "AIR" : s.toUpperCase());
+
+                        Long amountVal = pdc.get(KEY_AMOUNT, PersistentDataType.LONG);
+                        long amount = amountVal != null ? amountVal : 0L;
+
+                        Byte autoCollectVal = pdc.get(KEY_AUTO_COLLECT, PersistentDataType.BYTE);
+                        boolean autoCollect = autoCollectVal == null || autoCollectVal != 0;
+
+                        boolean autoBuyConfigured = pdc.has(KEY_AUTO_BUY, PersistentDataType.BYTE);
+                        boolean autoBuy = false;
+                        if (autoBuyConfigured) {
+                            Byte autoBuyVal = pdc.get(KEY_AUTO_BUY, PersistentDataType.BYTE);
+                            autoBuy = autoBuyVal != null && autoBuyVal != 0;
+                        }
+
+                        String uuidStr = pdc.get(KEY_UUID, PersistentDataType.STRING);
+                        UUID randomUUID = uuidStr != null ? UUID.fromString(uuidStr) : null;
+
+                        String serializedComponent = pdc.get(KEY_COMPONENT_DATA, PersistentDataType.STRING);
+
+                        NBTCompound storageBoxTag = null;
+                        com.github.retrooper.packetevents.protocol.item.ItemStack peItem = SpigotConversionUtil.fromBukkitItemStack(itemStack);
+                        if (peItem != null && peItem.getNBT() != null) {
+                            storageBoxTag = extractStorageBoxTag(peItem.getNBT());
+                        }
+
+                        return new StorageBox(type, amount, autoCollect, autoBuy, autoBuyConfigured, storageBoxTag, serializedComponent, randomUUID);
+                    }
+                }
+            }
+
             com.github.retrooper.packetevents.protocol.item.ItemStack peItem = SpigotConversionUtil.fromBukkitItemStack(itemStack);
             if (peItem == null) return null;
             NBTCompound tag = peItem.getNBT();
-            if (tag == null || tag.getTagOrNull("storageBoxType") == null) {
+            if (tag == null) return null;
+
+            NBTCompound rootTag = tag;
+            if (tag.getTagOrNull("storageBoxType") == null) {
+                NBTCompound customData = tag.getCompoundTagOrNull("minecraft:custom_data");
+                if (customData == null) customData = tag.getCompoundTagOrNull("custom_data");
+                if (customData != null && customData.getTagOrNull("storageBoxType") != null) {
+                    rootTag = customData;
+                }
+            }
+
+            if (rootTag.getTagOrNull("storageBoxType") == null) {
                 return null;
             }
-            String s = tag.getStringTagValueOrNull("storageBoxType");
+
+            String s = rootTag.getStringTagValueOrNull("storageBoxType");
             Material type = Material.valueOf(s == null || s.isEmpty() || s.equalsIgnoreCase("null") ? "AIR" : s.toUpperCase());
-            
+
             long amount = 0;
-            NBT amountNBT = tag.getTagOrNull("storageBoxAmount");
+            NBT amountNBT = rootTag.getTagOrNull("storageBoxAmount");
             if (amountNBT instanceof NBTNumber) {
                 amount = ((NBTNumber) amountNBT).getAsLong();
             }
 
             boolean autoCollect = true;
-            NBT autoCollectNBT = tag.getTagOrNull("storageBoxAutoCollect");
+            NBT autoCollectNBT = rootTag.getTagOrNull("storageBoxAutoCollect");
             if (autoCollectNBT instanceof NBTNumber) {
                 autoCollect = ((NBTNumber) autoCollectNBT).getAsByte() != 0;
             }
 
-            boolean autoBuyConfigured = tag.getTagOrNull("storageBoxAutoBuy") != null;
+            boolean autoBuyConfigured = rootTag.getTagOrNull("storageBoxAutoBuy") != null;
             boolean autoBuy = false;
             if (autoBuyConfigured) {
-                NBT autoBuyNBT = tag.getTagOrNull("storageBoxAutoBuy");
+                NBT autoBuyNBT = rootTag.getTagOrNull("storageBoxAutoBuy");
                 if (autoBuyNBT instanceof NBTNumber) {
                     autoBuy = ((NBTNumber) autoBuyNBT).getAsByte() != 0;
                 }
             }
 
-            NBTCompound storageBoxTag = tag.getCompoundTagOrNull("storageBoxTag");
-            if (storageBoxTag != null && storageBoxTag.getTagOrNull("storageBoxAmount") != null) {
-                throw new IllegalArgumentException("StorageBox cannot contain StorageBox");
-            }
-            if (storageBoxTag != null && storageBoxTag.isEmpty()) storageBoxTag = null;
-            String uuidStr = tag.getStringTagValueOrNull("randomUUID");
+            NBTCompound storageBoxTag = extractStorageBoxTag(rootTag);
+            String uuidStr = rootTag.getStringTagValueOrNull("randomUUID");
             UUID randomUUID = uuidStr != null ? UUID.fromString(uuidStr) : null;
-            return new StorageBox(type, amount, autoCollect, autoBuy, autoBuyConfigured, storageBoxTag, randomUUID);
+            return new StorageBox(type, amount, autoCollect, autoBuy, autoBuyConfigured, storageBoxTag, null, randomUUID);
         } catch (RuntimeException e) {
             return null;
         }
@@ -115,7 +187,8 @@ public class StorageBox {
         com.github.retrooper.packetevents.protocol.item.ItemStack peItem = SpigotConversionUtil.fromBukkitItemStack(stack);
         NBTCompound tag = peItem != null ? peItem.getNBT() : null;
         if (tag != null && tag.isEmpty()) tag = null;
-        return new StorageBox(stack.getType(), stack.getAmount(), true, false, false, tag != null ? tag.copy() : null, null);
+        String serialized = serializeItemStack(stack);
+        return new StorageBox(stack.getType(), stack.getAmount(), true, false, false, tag != null ? tag.copy() : null, serialized, null);
     }
 
     /**
@@ -123,14 +196,84 @@ public class StorageBox {
      * @return the item
      */
     public @Nullable ItemStack getComponentItemStack() {
-        ItemStack stack = new ItemStack(type == null ? Material.AIR : type);
-        if (type == null || type.isAir() || tag == null) return stack;
+        if (type == null || type.isAir()) {
+            return new ItemStack(Material.AIR);
+        }
+
+        if (serializedComponent != null && !serializedComponent.isEmpty()) {
+            ItemStack deserialized = deserializeItemStack(serializedComponent);
+            if (deserialized != null) {
+                return deserialized;
+            }
+        }
+
+        ItemStack stack = new ItemStack(type);
+        if (tag == null) return stack;
+
         com.github.retrooper.packetevents.protocol.item.ItemStack peItem = SpigotConversionUtil.fromBukkitItemStack(stack);
         if (peItem != null) {
             peItem.setNBT(tag.copy());
             ItemStack converted = SpigotConversionUtil.toBukkitItemStack(peItem);
-            if (converted != null) return converted;
+            if (converted != null) stack = converted;
         }
+
+        ItemMeta meta = stack.getItemMeta();
+        if (meta != null) {
+            NBTCompound display = tag.getCompoundTagOrNull("display");
+            if (display != null) {
+                String rawName = display.getStringTagValueOrNull("Name");
+                if (rawName != null && !meta.hasDisplayName()) {
+                    meta.setDisplayName(parseLegacyOrJsonText(rawName));
+                }
+                NBTList<NBTString> loreList = display.getStringListTagOrNull("Lore");
+                if (loreList != null && (!meta.hasLore() || meta.getLore() == null || meta.getLore().isEmpty())) {
+                    List<String> lore = new ArrayList<>();
+                    for (NBTString s : loreList.getTags()) {
+                        lore.add(parseLegacyOrJsonText(s.getValue()));
+                    }
+                    meta.setLore(lore);
+                }
+            }
+
+            if (tag.getTagOrNull("Damage") instanceof NBTNumber) {
+                int dmg = ((NBTNumber) tag.getTagOrNull("Damage")).getAsInt();
+                if (meta instanceof Damageable) {
+                    ((Damageable) meta).setDamage(dmg);
+                }
+            }
+
+            if (tag.getTagOrNull("CustomModelData") instanceof NBTNumber) {
+                int cmd = ((NBTNumber) tag.getTagOrNull("CustomModelData")).getAsInt();
+                meta.setCustomModelData(cmd);
+            }
+
+            NBTList<NBTCompound> enchants = tag.getCompoundListTagOrNull("Enchantments");
+            if (enchants != null) {
+                for (NBTCompound ench : enchants.getTags()) {
+                    String id = ench.getStringTagValueOrNull("id");
+                    int lvl = 1;
+                    if (ench.getTagOrNull("lvl") instanceof NBTNumber) {
+                        lvl = ((NBTNumber) ench.getTagOrNull("lvl")).getAsInt();
+                    }
+                    if (id != null) {
+                        id = id.toLowerCase().replace("minecraft:", "");
+                        Enchantment e = Enchantment.getByKey(NamespacedKey.minecraft(id));
+                        if (e != null) {
+                            meta.addEnchant(e, lvl, true);
+                        }
+                    }
+                }
+            }
+
+            restoreSoulboundToPdc(tag, meta);
+
+            stack.setItemMeta(meta);
+        }
+
+        if (this.serializedComponent == null) {
+            this.serializedComponent = serializeItemStack(stack);
+        }
+
         return stack;
     }
 
@@ -142,7 +285,7 @@ public class StorageBox {
         }
         String i18nName = StorageBoxPlugin.findTranslation(type);
         if (i18nName != null) return i18nName;
-        String name = type.name().replaceAll("_", " ").toLowerCase();
+        String name = type.name().replace("_", " ").toLowerCase();
         return name.substring(0, 1).toUpperCase() + name.substring(1).toLowerCase();
     }
 
@@ -168,7 +311,7 @@ public class StorageBox {
             canPlant = StorageBoxPlugin.getInstance().getConfig().getBoolean("extensions.plant", false);
             canEat = StorageBoxPlugin.getInstance().getConfig().getBoolean("extensions.eat", false);
         }
-        
+
         Set<Material> allowedMaterials = new HashSet<>(opaqueExempt);
         if (canPlant) {
             allowedMaterials.addAll(Arrays.asList(
@@ -190,17 +333,7 @@ public class StorageBox {
         NBTCompound tag = (peItem != null && peItem.getNBT() != null) ? peItem.getNBT().copy() : new NBTCompound();
 
         if (this.tag != null) {
-            for (Map.Entry<String, NBT> entry : this.tag.getTags().entrySet()) {
-                tag.setTag(entry.getKey(), entry.getValue().copy());
-            }
             tag.setTag("storageBoxTag", this.tag.copy());
-            tag.removeTag("MYTHIC_TYPE");
-            tag.removeTag("AttributeModifiers");
-            tag.removeTag("display");
-            tag.removeTag("Enchantments");
-            tag.removeTag("CustomModelData");
-            tag.removeTag("LifeItemId");
-            tag.removeTag("backup");
         }
         tag.setTag("storageBoxType", new NBTString(this.type == null ? "null" : this.type.name()));
         tag.setTag("storageBoxAmount", new NBTLong(this.amount));
@@ -220,6 +353,24 @@ public class StorageBox {
         if (meta == null) {
             throw new RuntimeException("ItemMeta is null");
         }
+
+        PersistentDataContainer pdc = meta.getPersistentDataContainer();
+        pdc.set(KEY_TYPE, PersistentDataType.STRING, this.type == null ? "null" : this.type.name());
+        pdc.set(KEY_AMOUNT, PersistentDataType.LONG, this.amount);
+        pdc.set(KEY_AUTO_COLLECT, PersistentDataType.BYTE, (byte) (this.autoCollect ? 1 : 0));
+        pdc.set(KEY_AUTO_BUY, PersistentDataType.BYTE, (byte) (this.autoBuy ? 1 : 0));
+        pdc.set(KEY_UUID, PersistentDataType.STRING, id);
+
+        if (this.serializedComponent == null && this.type != null && !this.type.isAir()) {
+            ItemStack compStack = getComponentItemStack();
+            if (compStack != null && !compStack.getType().isAir()) {
+                this.serializedComponent = serializeItemStack(compStack);
+            }
+        }
+        if (this.serializedComponent != null) {
+            pdc.set(KEY_COMPONENT_DATA, PersistentDataType.STRING, this.serializedComponent);
+        }
+
         meta.setDisplayName(ChatColor.GREEN + "Storage Box " + ChatColor.YELLOW + "[" + ChatColor.WHITE + getComponentItemStackName() + ChatColor.YELLOW + "] " + ChatColor.GRAY + "<" + this.amount + ">");
         meta.setLore(Arrays.asList(
                 ChatColor.GRAY + "数: " + amount,
@@ -244,6 +395,7 @@ public class StorageBox {
         if (amount <= 0 && type == Material.EMERALD_BLOCK) {
             type = null;
             tag = null;
+            serializedComponent = null;
         }
     }
 
@@ -269,6 +421,10 @@ public class StorageBox {
      */
     public void setType(@Nullable Material type) {
         this.type = type;
+        if (type == null || type.isAir()) {
+            this.tag = null;
+            this.serializedComponent = null;
+        }
     }
 
     public long getAmount() {
@@ -284,6 +440,15 @@ public class StorageBox {
             throw new IllegalArgumentException("StorageBox cannot contain StorageBox");
         }
         this.tag = tag;
+        this.serializedComponent = null;
+    }
+
+    public @Nullable String getSerializedComponent() {
+        return serializedComponent;
+    }
+
+    public void setSerializedComponent(@Nullable String serializedComponent) {
+        this.serializedComponent = serializedComponent;
     }
 
     public boolean isEmpty() {
@@ -316,7 +481,122 @@ public class StorageBox {
         NBTCompound tag = peItem != null ? peItem.getNBT() : null;
         if (tag != null && tag.isEmpty()) tag = null;
         this.setTag(tag != null ? tag.copy() : null);
+        this.serializedComponent = serializeItemStack(stack);
         this.type = stack.getType();
         this.amount = stack.getAmount();
+    }
+
+    public static @Nullable String serializeItemStack(@Nullable ItemStack stack) {
+        if (stack == null || stack.getType().isAir()) return null;
+        ItemStack clone = stack.clone();
+        clone.setAmount(1);
+        YamlConfiguration yaml = new YamlConfiguration();
+        yaml.set("item", clone);
+        return yaml.saveToString();
+    }
+
+    public static @Nullable ItemStack deserializeItemStack(@Nullable String serialized) {
+        if (serialized == null || serialized.isEmpty()) return null;
+        try {
+            YamlConfiguration yaml = new YamlConfiguration();
+            yaml.loadFromString(serialized);
+            ItemStack item = yaml.getItemStack("item");
+            if (item != null) {
+                item = item.clone();
+                item.setAmount(1);
+                return item;
+            }
+        } catch (Exception ignored) {}
+        return null;
+    }
+
+    private static @Nullable NBTCompound extractStorageBoxTag(@NotNull NBTCompound tag) {
+        NBTCompound storageBoxTag = tag.getCompoundTagOrNull("storageBoxTag");
+        if (storageBoxTag != null && storageBoxTag.getTagOrNull("storageBoxAmount") != null) {
+            throw new IllegalArgumentException("StorageBox cannot contain StorageBox");
+        }
+        if (storageBoxTag != null && !storageBoxTag.isEmpty()) {
+            return storageBoxTag.copy();
+        }
+        if (tag.getTagOrNull("display") != null || tag.getTagOrNull("Enchantments") != null || tag.getTagOrNull("soulbound") != null) {
+            NBTCompound copy = tag.copy();
+            copy.removeTag("storageBoxType");
+            copy.removeTag("storageBoxAmount");
+            copy.removeTag("storageBoxAutoCollect");
+            copy.removeTag("storageBoxAutoBuy");
+            copy.removeTag("randomUUID");
+            copy.removeTag("PublicBukkitValues");
+            if (!copy.isEmpty()) return copy;
+        }
+        return null;
+    }
+
+    @SuppressWarnings("deprecation")
+    private static void restoreSoulboundToPdc(@NotNull NBTCompound tag, @NotNull ItemMeta meta) {
+        String soulboundUuid = null;
+        // 1. 直下 "soulbound" タグ
+        if (tag.getTagOrNull("soulbound") != null) {
+            soulboundUuid = tag.getStringTagValueOrNull("soulbound");
+        }
+        // 2. PublicBukkitValues タグ
+        if (soulboundUuid == null) {
+            NBTCompound pbv = tag.getCompoundTagOrNull("PublicBukkitValues");
+            if (pbv != null && pbv.getTagOrNull("soulbound:soulbound") != null) {
+                soulboundUuid = pbv.getStringTagValueOrNull("soulbound:soulbound");
+            }
+        }
+        // 3. Lore からの抽出フォールバック
+        if (soulboundUuid == null && meta.hasLore()) {
+            List<String> lore = meta.getLore();
+            if (lore != null) {
+                for (String line : lore) {
+                    String stripped = ChatColor.stripColor(line);
+                    if (stripped.contains("Soulbound: ")) {
+                        soulboundUuid = stripped.substring(stripped.indexOf("Soulbound: ") + 11).trim();
+                        if (soulboundUuid.endsWith("]")) soulboundUuid = soulboundUuid.substring(0, soulboundUuid.length() - 1).trim();
+                        break;
+                    }
+                    if (stripped.contains("Soulbound (取引不可) ")) {
+                        soulboundUuid = stripped.substring(stripped.indexOf("Soulbound (取引不可) ") + 19).trim();
+                        if (soulboundUuid.endsWith("*")) soulboundUuid = soulboundUuid.substring(0, soulboundUuid.length() - 1).trim();
+                        break;
+                    }
+                }
+            }
+        }
+        if (soulboundUuid != null && !soulboundUuid.isEmpty()) {
+            try {
+                UUID.fromString(soulboundUuid);
+                NamespacedKey soulboundKey = new NamespacedKey("soulbound", "soulbound");
+                meta.getPersistentDataContainer().set(soulboundKey, PersistentDataType.STRING, soulboundUuid);
+            } catch (IllegalArgumentException ignored) {}
+        }
+    }
+
+    private static String parseLegacyOrJsonText(String text) {
+        if (text == null) return null;
+        if (text.startsWith("{") && text.endsWith("}")) {
+            try {
+                JsonElement el = new JsonParser().parse(text);
+                if (el.isJsonObject()) {
+                    JsonObject obj = el.getAsJsonObject();
+                    StringBuilder sb = new StringBuilder();
+                    if (obj.has("text")) {
+                        sb.append(obj.get("text").getAsString());
+                    }
+                    if (obj.has("extra")) {
+                        for (JsonElement extra : obj.getAsJsonArray("extra")) {
+                            if (extra.isJsonObject() && extra.getAsJsonObject().has("text")) {
+                                sb.append(extra.getAsJsonObject().get("text").getAsString());
+                            } else if (extra.isJsonPrimitive()) {
+                                sb.append(extra.getAsString());
+                            }
+                        }
+                    }
+                    if (sb.length() > 0) return sb.toString();
+                }
+            } catch (Exception ignored) {}
+        }
+        return text;
     }
 }

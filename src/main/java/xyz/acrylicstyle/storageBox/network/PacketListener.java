@@ -65,13 +65,39 @@ public class PacketListener extends PacketListenerAbstract {
     private static ItemStack rewriteItem(ItemStack item) {
         if (item == null || item.isEmpty()) return null;
         NBTCompound tag = item.getNBT();
-        if (tag == null || tag.getTagOrNull("storageBoxType") == null) return null;
+        if (tag == null) return null;
+
         String typeStr = tag.getStringTagValueOrNull("storageBoxType");
+        NBTCompound storageBoxTag = tag.getCompoundTagOrNull("storageBoxTag");
+
+        if (typeStr == null) {
+            NBTCompound customData = tag.getCompoundTagOrNull("minecraft:custom_data");
+            if (customData == null) customData = tag.getCompoundTagOrNull("custom_data");
+            if (customData != null) {
+                typeStr = customData.getStringTagValueOrNull("storageBoxType");
+                if (storageBoxTag == null) {
+                    storageBoxTag = customData.getCompoundTagOrNull("storageBoxTag");
+                }
+            }
+        }
+        if (typeStr == null) {
+            NBTCompound pbv = tag.getCompoundTagOrNull("PublicBukkitValues");
+            if (pbv == null) {
+                NBTCompound customData = tag.getCompoundTagOrNull("minecraft:custom_data");
+                if (customData != null) pbv = customData.getCompoundTagOrNull("PublicBukkitValues");
+            }
+            if (pbv != null) {
+                typeStr = pbv.getStringTagValueOrNull("storagebox:type");
+            }
+        }
+
         if (typeStr == null || typeStr.isEmpty() || typeStr.equalsIgnoreCase("null")) return null;
 
         try {
             NBTCompound rewrittenTag = tag.copy();
-            NBTCompound storageBoxTag = rewrittenTag.getCompoundTagOrNull("storageBoxTag");
+            if (storageBoxTag == null) {
+                storageBoxTag = rewrittenTag.getCompoundTagOrNull("storageBoxTag");
+            }
             if (storageBoxTag != null) {
                 NBT customModelData = storageBoxTag.getTagOrNull("CustomModelData");
                 if (customModelData != null) {

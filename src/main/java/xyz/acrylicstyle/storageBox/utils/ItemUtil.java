@@ -1,7 +1,7 @@
 package xyz.acrylicstyle.storageBox.utils;
 
-import io.github.retrooper.packetevents.util.SpigotConversionUtil;
 import com.github.retrooper.packetevents.protocol.nbt.NBTCompound;
+import io.github.retrooper.packetevents.util.SpigotConversionUtil;
 import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
@@ -29,6 +29,13 @@ public class ItemUtil {
         NBTCompound tag = peItem.getNBT();
         if (tag == null) return "";
         String value = tag.getStringTagValueOrNull(key);
-        return value != null ? value : "";
+        if (value != null) return value;
+        NBTCompound customData = tag.getCompoundTagOrNull("minecraft:custom_data");
+        if (customData == null) customData = tag.getCompoundTagOrNull("custom_data");
+        if (customData != null) {
+            value = customData.getStringTagValueOrNull(key);
+            if (value != null) return value;
+        }
+        return "";
     }
 }
