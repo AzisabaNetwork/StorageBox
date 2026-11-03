@@ -410,6 +410,23 @@ public class StorageBoxPlugin extends JavaPlugin implements Listener {
         }
     }
 
+    @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
+    public void onInventoryClickBundle(@NotNull InventoryClickEvent e) {
+        // prevent Storage Box from being put into a bundle (causes duplication on 1.21.x)
+        ItemStack cursor = e.getCursor();
+        ItemStack current = e.getCurrentItem();
+        if ((isBundle(cursor) && current != null && StorageBox.getStorageBox(current) != null)
+                || (isBundle(current) && cursor != null && StorageBox.getStorageBox(cursor) != null)) {
+            e.setCancelled(true);
+            e.getWhoClicked().sendMessage(ChatColor.RED + "Storage Boxはバンドルに入れられません。");
+        }
+    }
+
+    private static boolean isBundle(@Nullable ItemStack item) {
+        // Material.BUNDLE does not exist in 1.15 API; colored bundles exist since 1.21.2
+        return item != null && item.getType().name().endsWith("BUNDLE");
+    }
+
     public static int getEmptySlots(@NotNull Player p) {
         ItemStack[] cont = p.getInventory().getContents();
         int i = 0;
