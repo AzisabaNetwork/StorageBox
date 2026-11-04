@@ -114,6 +114,44 @@ public class StorageBoxPlugin extends JavaPlugin implements Listener {
         });
     }
 
+    /**
+     * Material names that were renamed between Minecraft versions.
+     * Each entry is a pair of names that refer to the same item; lookups work in both directions,
+     * so a config written for either version loads on the other.
+     */
+    private static final String[][] MATERIAL_ALIASES = {
+            {"GRASS", "SHORT_GRASS"},       // renamed in 1.20.3
+            {"SCUTE", "TURTLE_SCUTE"},      // renamed in 1.20.5
+            {"GRASS_PATH", "DIRT_PATH"},    // renamed in 1.17
+    };
+
+    /**
+     * Resolves a material name, falling back to its renamed counterpart if the name
+     * does not exist on the running server version.
+     *
+     * @throws IllegalArgumentException if neither the name nor any alias exists
+     */
+    private static @NotNull Material resolveMaterial(@NotNull String name) {
+        String upper = name.toUpperCase(Locale.ROOT);
+        try {
+            return Material.valueOf(upper);
+        } catch (IllegalArgumentException e) {
+            for (String[] pair : MATERIAL_ALIASES) {
+                String alias = null;
+                if (pair[0].equals(upper)) alias = pair[1];
+                else if (pair[1].equals(upper)) alias = pair[0];
+                if (alias == null) continue;
+                try {
+                    Material material = Material.valueOf(alias);
+                    LOGGER.info("Material " + upper + " does not exist on this server version, using " + alias + " instead");
+                    return material;
+                } catch (IllegalArgumentException ignored) {
+                }
+            }
+            throw e;
+        }
+    }
+
     private void loadPrices(@NotNull String path, @NotNull Map<ItemStack, Long> map) {
         map.clear();
         ConfigurationSection section = getConfig().getConfigurationSection(path);
@@ -122,13 +160,13 @@ public class StorageBoxPlugin extends JavaPlugin implements Listener {
             try {
                 int bracketLocation = key.indexOf('{');
                 if (bracketLocation == -1) {
-                    map.put(new ItemStack(Material.valueOf(key.toUpperCase())), section.getLong(key));
+                    map.put(new ItemStack(resolveMaterial(key)), section.getLong(key));
                 } else {
                     String material = key.substring(0, bracketLocation);
                     String snbt = key.substring(bracketLocation);
                     JsonElement jsonElement = new JsonParser().parse(snbt);
                     NBTCompound tag = (NBTCompound) NBTCodec.jsonToNBT(jsonElement);
-                    ItemStack stack = new ItemStack(Material.valueOf(material.toUpperCase()));
+                    ItemStack stack = new ItemStack(resolveMaterial(material));
                     com.github.retrooper.packetevents.protocol.item.ItemStack peItem = SpigotConversionUtil.fromBukkitItemStack(stack);
                     if (peItem != null) {
                         peItem.setNBT(tag);
