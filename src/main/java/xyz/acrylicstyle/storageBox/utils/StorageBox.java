@@ -130,14 +130,14 @@ public class StorageBox {
             }
 
             com.github.retrooper.packetevents.protocol.item.ItemStack peItem = SpigotConversionUtil.fromBukkitItemStack(itemStack);
-            if (peItem == null) return null;
+            if (peItem == null) return fromLegacyLore(itemStack);
             NBTCompound tag = peItem.getNBT();
             if (tag == null) {
                 try {
                     tag = peItem.getComponentOr(ComponentTypes.CUSTOM_DATA, null);
                 } catch (Throwable ignored) {}
             }
-            if (tag == null) return null;
+            if (tag == null) return fromLegacyLore(itemStack);
 
             NBTCompound rootTag = tag;
             if (tag.getTagOrNull("storageBoxType") == null) {
@@ -149,7 +149,7 @@ public class StorageBox {
             }
 
             if (rootTag.getTagOrNull("storageBoxType") == null) {
-                return null;
+                return fromLegacyLore(itemStack);
             }
 
             String s = rootTag.getStringTagValueOrNull("storageBoxType");
@@ -198,6 +198,63 @@ public class StorageBox {
         } catch (RuntimeException e) {
             return null;
         }
+    }
+
+    /**
+     * Recovers a Storage Box whose NBT was lost (e.g. old 1.15.2 items migrated without their custom tags)
+     * from its display name and lore. Requires the "Storage Box" name and an "ID: &lt;uuid&gt;" lore line,
+     * which survival players cannot forge.
+     */
+    @SuppressWarnings("deprecation")
+    private static @Nullable StorageBox fromLegacyLore(@NotNull ItemStack itemStack) {
+        if (!itemStack.hasItemMeta()) return null;
+        ItemMeta meta = itemStack.getItemMeta();
+        if (meta == null || !meta.hasDisplayName() || !meta.hasLore()) return null;
+        String name = ChatColor.stripColor(meta.getDisplayName());
+        if (name == null || !name.startsWith("Storage Box")) return null;
+        List<String> lore = meta.getLore();
+        if (lore == null) return null;
+
+        UUID randomUUID = null;
+        Long amount = null;
+        Material type = null;
+        boolean autoCollect = true;
+        boolean autoBuy = false;
+        boolean autoBuyConfigured = false;
+        for (String rawLine : lore) {
+            String line = ChatColor.stripColor(rawLine);
+            if (line == null) continue;
+            line = line.trim();
+            try {
+                if (line.startsWith("ID:")) {
+                    randomUUID = UUID.fromString(line.substring(3).trim());
+                } else if (line.startsWith("数:")) {
+                    amount = Long.parseLong(line.substring(2).trim());
+                } else if (line.startsWith("自動回収:")) {
+                    autoCollect = Boolean.parseBoolean(line.substring(5).trim());
+                } else if (line.startsWith("自動購入:")) {
+                    autoBuyConfigured = true;
+                    autoBuy = Boolean.parseBoolean(line.substring(5).trim());
+                } else if (line.startsWith("不透明:")) {
+                    int lp = line.lastIndexOf('('), rp = line.lastIndexOf(')');
+                    if (lp != -1 && rp > lp) {
+                        type = Material.matchMaterial(line.substring(lp + 1, rp).trim());
+                    }
+                }
+            } catch (IllegalArgumentException ignored) {}
+        }
+        if (randomUUID == null) return null;
+
+        if (amount == null) {
+            int lastLt = name.lastIndexOf('<'), lastGt = name.lastIndexOf('>');
+            if (lastLt != -1 && lastGt > lastLt) {
+                try {
+                    amount = Long.parseLong(name.substring(lastLt + 1, lastGt).trim());
+                } catch (NumberFormatException ignored) {}
+            }
+        }
+        if (type == null) type = itemStack.getType();
+        return new StorageBox(type, amount == null ? 0 : amount, autoCollect, autoBuy, autoBuyConfigured, null, null, randomUUID);
     }
 
     public static StorageBox getNewStorageBox() {
