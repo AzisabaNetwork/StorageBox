@@ -364,6 +364,13 @@ public class StorageBox {
             // Content stored on 1.15.2: let the server's DataFixer convert it. Any serializedComponent of such a
             // box was produced by the old hand-made conversion below, so it is replaced (getItemStack saves it).
             ItemStack upgraded = LegacyComponentUpgrader.upgrade(type, Objects.requireNonNull(tag));
+            ItemStack mythic = upgraded == null ? null : LegacyComponentUpgrader.currentMythicItem(type, tag, upgraded);
+            if (mythic != null) {
+                // A MythicMobs item: the box holds the item MythicMobs generates today from now on
+                // (same name and lore; it stacks and auto-collects with new drops). getItemStack saves it.
+                adoptComponent(mythic);
+                return mythic.clone();
+            }
             if (upgraded != null) {
                 if (!legacyComponentUpgraded || serializedComponent == null) {
                     this.serializedComponent = serializeItemStack(upgraded);
@@ -695,6 +702,24 @@ public class StorageBox {
         this.serializedComponent = serializeItemStack(stack);
         this.type = stack.getType();
         this.amount = stack.getAmount();
+    }
+
+    /** Makes the item the box's content without changing the amount (the content tag is no longer 1.15.2 NBT). */
+    private void adoptComponent(@NotNull ItemStack stack) {
+        NBTCompound newTag = null;
+        com.github.retrooper.packetevents.protocol.item.ItemStack peItem = SpigotConversionUtil.fromBukkitItemStack(stack);
+        if (peItem != null) {
+            newTag = peItem.getNBT();
+            if (newTag == null) {
+                try {
+                    newTag = peItem.getComponentOr(ComponentTypes.CUSTOM_DATA, null);
+                } catch (Throwable ignored) {}
+            }
+        }
+        this.tag = newTag == null || newTag.isEmpty() ? null : newTag.copy();
+        this.type = stack.getType();
+        this.serializedComponent = serializeItemStack(stack);
+        this.legacyComponentUpgraded = true;
     }
 
     public static @Nullable String serializeItemStack(@Nullable ItemStack stack) {

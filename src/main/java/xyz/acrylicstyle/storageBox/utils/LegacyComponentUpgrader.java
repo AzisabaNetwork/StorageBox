@@ -226,6 +226,54 @@ public final class LegacyComponentUpgrader {
         return item;
     }
 
+    /** MMIDs resolved per legacy tag ("" when the content is not a MythicMobs item). */
+    private static final Map<CacheKey, String> MYTHIC_IDS = Collections.synchronizedMap(
+            new LinkedHashMap<CacheKey, String>(64, 0.75f, true) {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<CacheKey, String> eldest) {
+                    return size() > CACHE_SIZE;
+                }
+            });
+
+    /**
+     * The current MythicMobs item that a 1.15.2 Storage Box content stands for.
+     * <p>
+     * Many MythicMobs 4 items never carried {@code MYTHIC_TYPE}, so the upgraded content is not a Mythic item at all.
+     * MythicItemIdCompat finds its MMID (old tag, or the single 1.15.2 definition with that material, name and lore)
+     * and the box then holds the item MythicMobs generates today, so it stacks and auto-collects with new drops.
+     *
+     * @param legacyTag the 1.15.2 content tag (cache key)
+     * @param upgraded  the content as converted by the DataFixer
+     * @return the current Mythic item (amount 1), or null when it is not a Mythic item or this cannot be decided
+     *         (MythicItemIdCompat 1.5.0+ missing, or not on the main thread)
+     */
+    public static @Nullable ItemStack currentMythicItem(@NotNull Material type, @NotNull NBTCompound legacyTag,
+                                                        @NotNull ItemStack upgraded) {
+        if (!Bukkit.isPrimaryThread()) return null;
+        Plugin compat = Bukkit.getPluginManager().getPlugin("MythicItemIdCompat");
+        if (compat == null || !compat.isEnabled()) return null;
+        try {
+            CacheKey key = new CacheKey(type, legacyTag);
+            String id = MYTHIC_IDS.get(key);
+            if (id == null) {
+                Object resolved = compat.getClass().getMethod("resolveMythicId", ItemStack.class).invoke(compat, upgraded);
+                id = resolved instanceof String ? (String) resolved : "";
+                MYTHIC_IDS.put(key, id);
+            }
+            if (id.isEmpty()) return null;
+            Object current = compat.getClass().getMethod("currentMythicItem", String.class).invoke(compat, id);
+            if (!(current instanceof ItemStack) || ((ItemStack) current).getType().isAir()) return null;
+            ItemStack item = ((ItemStack) current).clone();
+            item.setAmount(1);
+            return item;
+        } catch (NoSuchMethodException e) {
+            return null; // MythicItemIdCompat older than 1.5.0
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            Bukkit.getLogger().warning("[StorageBox] Could not look up the MythicMobs item of a 1.15.2 Storage Box: " + e);
+            return null;
+        }
+    }
+
     private static final class CacheKey {
         private final Material type;
         private final NBTCompound tag;
