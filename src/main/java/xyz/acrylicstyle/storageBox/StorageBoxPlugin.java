@@ -469,14 +469,10 @@ public class StorageBoxPlugin extends JavaPlugin implements Listener {
     }
 
     public static int getEmptySlots(@NotNull Player p) {
-        ItemStack[] cont = p.getInventory().getContents();
+        // Only the 36 storage slots (hotbar + main inventory): getContents() also has the armor and off hand slots,
+        // and on 1.21.5+ the body and saddle equipment slots too, which were counted as free space.
         int i = 0;
-        for (ItemStack item : cont) if (item == null || item.getType() == Material.AIR) i++;
-        if (p.getInventory().getHelmet() == null || p.getInventory().getHelmet().getType() == Material.AIR) i--;
-        if (p.getInventory().getChestplate() == null || p.getInventory().getChestplate().getType() == Material.AIR) i--;
-        if (p.getInventory().getLeggings() == null || p.getInventory().getLeggings().getType() == Material.AIR) i--;
-        if (p.getInventory().getBoots() == null || p.getInventory().getBoots().getType() == Material.AIR) i--;
-        if (p.getInventory().getItemInOffHand().getType() == Material.AIR) i--;
+        for (ItemStack item : p.getInventory().getStorageContents()) if (item == null || item.getType() == Material.AIR) i++;
         return i;
     }
 
