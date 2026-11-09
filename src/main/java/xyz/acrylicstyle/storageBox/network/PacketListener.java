@@ -8,6 +8,7 @@ import com.github.retrooper.packetevents.protocol.item.type.ItemType;
 import com.github.retrooper.packetevents.protocol.item.type.ItemTypes;
 import com.github.retrooper.packetevents.protocol.nbt.NBT;
 import com.github.retrooper.packetevents.protocol.nbt.NBTCompound;
+import com.github.retrooper.packetevents.protocol.nbt.NBTNumber;
 import com.github.retrooper.packetevents.protocol.packettype.PacketType;
 import com.github.retrooper.packetevents.protocol.player.Equipment;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityEquipment;
@@ -130,6 +131,17 @@ public class PacketListener extends PacketListenerAbstract {
             try {
                 builder.component(ComponentTypes.CUSTOM_DATA, rewrittenTag);
             } catch (Throwable ignored) {}
+            // 1.20.5+ clients take the model from the custom_model_data component, not from the item's NBT.
+            // Boxes saved on 1.15.2 only have the content's model in storageBoxTag; boxes written since carry
+            // the component themselves (StorageBox#getItemStack), which is left as is.
+            if (storageBoxTag != null && storageBoxTag.getTagOrNull("CustomModelData") instanceof NBTNumber) {
+                try {
+                    if (item.getComponentOr(ComponentTypes.CUSTOM_MODEL_DATA_LISTS, null) == null) {
+                        builder.component(ComponentTypes.CUSTOM_MODEL_DATA,
+                                ((NBTNumber) storageBoxTag.getTagOrNull("CustomModelData")).getAsInt());
+                    }
+                } catch (Throwable ignored) {}
+            }
 
             return builder.build();
         } catch (Exception e) {

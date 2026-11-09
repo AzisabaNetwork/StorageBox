@@ -591,6 +591,10 @@ public class StorageBox {
         ));
         if (type == null || type.isAir()) {
             meta.setCustomModelData(StorageBoxPlugin.customModelData);
+        } else {
+            // the box looks like its content (PacketListener also shows the content's material)
+            Integer contentModel = contentCustomModelData();
+            if (contentModel != null) meta.setCustomModelData(contentModel);
         }
         if (amount > 0) {
             meta.addEnchant(Enchantment.DURABILITY, 1, true);
@@ -702,6 +706,19 @@ public class StorageBox {
         this.serializedComponent = serializeItemStack(stack);
         this.type = stack.getType();
         this.amount = stack.getAmount();
+    }
+
+    /** The content's custom model data, or null when it has none. */
+    private @Nullable Integer contentCustomModelData() {
+        try {
+            ItemStack content = getComponentItemStack();
+            if (content == null || content.getType().isAir() || !content.hasItemMeta()) return null;
+            ItemMeta contentMeta = content.getItemMeta();
+            if (contentMeta == null || !contentMeta.hasCustomModelData()) return null;
+            return contentMeta.getCustomModelData();
+        } catch (RuntimeException e) {
+            return null; // e.g. a model data without a number (1.21.4+ strings/flags only)
+        }
     }
 
     /** Makes the item the box's content without changing the amount (the content tag is no longer 1.15.2 NBT). */
