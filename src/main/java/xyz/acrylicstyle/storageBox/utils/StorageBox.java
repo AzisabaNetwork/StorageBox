@@ -6,6 +6,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import io.github.retrooper.packetevents.util.SpigotConversionUtil;
+import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
@@ -55,6 +56,8 @@ public class StorageBox {
     private @Nullable Material type;
     private long amount;
     private @Nullable NBTCompound tag;
+    /** serializedComponent has been replaced by the DataFixer conversion of a 1.15.2 tag (see getComponentItemStack) */
+    private boolean legacyComponentUpgraded;
     private @Nullable String serializedComponent;
     private final @Nullable UUID randomUUID;
 
@@ -90,7 +93,7 @@ public class StorageBox {
                     PersistentDataContainer pdc = meta.getPersistentDataContainer();
                     if (pdc.has(KEY_TYPE, PersistentDataType.STRING)) {
                         String s = pdc.get(KEY_TYPE, PersistentDataType.STRING);
-                        Material type = Material.valueOf(s == null || s.isEmpty() || s.equalsIgnoreCase("null") ? "AIR" : s.toUpperCase());
+                        Material type = LegacyComponentUpgrader.resolveMaterial(s);
 
                         Long amountVal = pdc.get(KEY_AMOUNT, PersistentDataType.LONG);
                         long amount = amountVal != null ? amountVal : 0L;
@@ -153,7 +156,8 @@ public class StorageBox {
             }
 
             String s = rootTag.getStringTagValueOrNull("storageBoxType");
-            Material type = Material.valueOf(s == null || s.isEmpty() || s.equalsIgnoreCase("null") ? "AIR" : s.toUpperCase());
+            // 1.15.2 boxes may name a material that was renamed since (GRASS -> SHORT_GRASS...)
+            Material type = LegacyComponentUpgrader.resolveMaterial(s);
 
             long amount = 0;
             NBT amountNBT = rootTag.getTagOrNull("storageBoxAmount");
@@ -218,6 +222,7 @@ public class StorageBox {
         UUID randomUUID = null;
         Long amount = null;
         Material type = null;
+        Boolean opaque = null;
         boolean autoCollect = true;
         boolean autoBuy = false;
         boolean autoBuyConfigured = false;
@@ -236,8 +241,12 @@ public class StorageBox {
                     autoBuyConfigured = true;
                     autoBuy = Boolean.parseBoolean(line.substring(5).trim());
                 } else if (line.startsWith("不透明:")) {
+                    // "不透明: <bool> (<box material>)": the material is the box's own item. It equals the
+                    // content only when the box is not opaque; an opaque box is always a STICK.
+                    String value = line.substring(4).trim();
+                    opaque = value.startsWith("true");
                     int lp = line.lastIndexOf('('), rp = line.lastIndexOf(')');
-                    if (lp != -1 && rp > lp) {
+                    if (!opaque && lp != -1 && rp > lp) {
                         type = Material.matchMaterial(line.substring(lp + 1, rp).trim());
                     }
                 }
@@ -253,8 +262,65 @@ public class StorageBox {
                 } catch (NumberFormatException ignored) {}
             }
         }
-        if (type == null) type = itemStack.getType();
+        Material boxMaterial = itemStack.getType();
+        boolean emptyBox = boxMaterial == Material.BARRIER; // a box without content type is a barrier
+        if (type == null && !emptyBox) {
+            // a non-opaque box shows its content; a STICK may be either a box of sticks or an opaque box
+            boolean boxIsContent = !Boolean.TRUE.equals(opaque) && boxMaterial != Material.STICK;
+            type = boxIsContent ? boxMaterial : materialFromBoxName(name);
+        }
+        if (type == null && !emptyBox) {
+            // The content cannot be told from the lore (e.g. a Mythic item with its own name). Do not guess:
+            // treating it as a box of sticks would hand out sticks and destroy the real items.
+            Bukkit.getLogger().warning("[StorageBox] Could not recover the content type of legacy Storage Box "
+                    + randomUUID + " (\"" + name + "\"); it needs its NBT restored.");
+            return null;
+        }
         return new StorageBox(type, amount == null ? 0 : amount, autoCollect, autoBuy, autoBuyConfigured, null, null, randomUUID);
+    }
+
+    /**
+     * The content material named in "Storage Box [&lt;name&gt;] &lt;amount&gt;", when exactly one material has that
+     * name (its English name as {@link #getComponentItemStackName()} formats it, or its translation).
+     * Null for custom item names and for anything ambiguous.
+     */
+    static @Nullable Material materialFromBoxName(@NotNull String strippedName) {
+        int start = strippedName.indexOf('[');
+        int end = strippedName.lastIndexOf(']');
+        if (start == -1 || end <= start) return null;
+        String inner = strippedName.substring(start + 1, end).trim();
+        if (inner.isEmpty()) return null;
+        Material found = null;
+        for (Material material : Material.values()) {
+            if (isLegacyMaterial(material) || material.isAir()) continue;
+            if (!inner.equalsIgnoreCase(englishName(material)) && !inner.equals(translation(material))) continue;
+            if (found != null && found != material) return null; // ambiguous
+            found = material;
+        }
+        return found;
+    }
+
+    static @NotNull String englishName(@NotNull Material material) {
+        String name = material.name().replace("_", " ").toLowerCase();
+        return name.substring(0, 1).toUpperCase() + name.substring(1);
+    }
+
+    @SuppressWarnings("deprecation")
+    private static boolean isLegacyMaterial(@NotNull Material material) {
+        try {
+            return material.isLegacy();
+        } catch (Throwable ignored) {
+            return material.name().startsWith("LEGACY_");
+        }
+    }
+
+    private static @Nullable String translation(@NotNull Material material) {
+        if (StorageBoxPlugin.getInstance() == null) return null;
+        try {
+            return StorageBoxPlugin.findTranslation(material);
+        } catch (RuntimeException ignored) {
+            return null; // no translation for this material
+        }
     }
 
     public static StorageBox getNewStorageBox() {
@@ -292,6 +358,19 @@ public class StorageBox {
     public @Nullable ItemStack getComponentItemStack() {
         if (type == null || type.isAir()) {
             return new ItemStack(Material.AIR);
+        }
+
+        if (LegacyComponentUpgrader.isLegacyItemTag(tag)) {
+            // Content stored on 1.15.2: let the server's DataFixer convert it. Any serializedComponent of such a
+            // box was produced by the old hand-made conversion below, so it is replaced (getItemStack saves it).
+            ItemStack upgraded = LegacyComponentUpgrader.upgrade(type, Objects.requireNonNull(tag));
+            if (upgraded != null) {
+                if (!legacyComponentUpgraded || serializedComponent == null) {
+                    this.serializedComponent = serializeItemStack(upgraded);
+                    legacyComponentUpgraded = true;
+                }
+                return upgraded;
+            }
         }
 
         if (serializedComponent != null && !serializedComponent.isEmpty()) {

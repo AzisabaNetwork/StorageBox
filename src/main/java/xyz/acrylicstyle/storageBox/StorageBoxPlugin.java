@@ -494,9 +494,13 @@ public class StorageBoxPlugin extends JavaPlugin implements Listener {
 
     public static @Nullable String findTranslation(@NotNull Material material) {
         JsonObject translations = getMaterialTranslations();
-        JsonElement element = translations.get("block.minecraft." + material.name().toLowerCase());
-        if (element == null) {
-            element = translations.get("item.minecraft." + material.name().toLowerCase());
+        String key = material.name().toLowerCase(Locale.ROOT);
+        JsonElement element = translations.get("block.minecraft." + key);
+        if (element == null || !element.isJsonPrimitive()) {
+            element = translations.get("item.minecraft." + key);
+        }
+        if (element == null || !element.isJsonPrimitive()) {
+            return null; // not in the bundled translation file (e.g. newer materials)
         }
         return element.getAsString();
     }
