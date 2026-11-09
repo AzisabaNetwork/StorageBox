@@ -57,12 +57,14 @@ public class StorageBox {
 
     public static @Nullable StorageBox getStorageBox(@NotNull ItemStack itemStack) {
         try {
-            CompoundTag tag = ItemUtil.getCustomData(itemStack);
+            // the box's own tags live in minecraft:custom_data (ItemUtil.getCustomData returns every component)
+            CompoundTag tag = ItemUtil.getRawCustomData(itemStack);
             if (tag == null || !tag.contains("storageBoxType")) {
                 return null;
             }
             String s = tag.getString("storageBoxType").orElse("STONE");
-            Material type = Material.valueOf(s.isEmpty() || s.equals("null") ? "AIR" : s.toUpperCase());
+            // 1.15.2 boxes may name a material that was renamed since (GRASS -> SHORT_GRASS...)
+            Material type = LegacyComponentUpgrader.resolveMaterial(s);
             long amount = tag.getLong("storageBoxAmount").orElse(0L);
             boolean autoCollect = tag.getBoolean("storageBoxAutoCollect").orElse(false);
             boolean autoBuyConfigured = tag.contains("storageBoxAutoBuy");
@@ -92,8 +94,7 @@ public class StorageBox {
     }
 
     public static @NotNull StorageBox wrapWithStorageBox(@NotNull ItemStack stack) {
-        CompoundTag tag = ItemUtil.getCustomData(stack);
-        if (tag != null && tag.isEmpty()) tag = null;
+        CompoundTag tag = ItemUtil.getComponentPatch(stack);
         return new StorageBox(stack.getType(), stack.getAmount(), true, false, false, tag, null);
     }
 
@@ -104,8 +105,22 @@ public class StorageBox {
     public @Nullable ItemStack getComponentItemStack() {
         ItemStack stack = new ItemStack(type == null ? Material.AIR : type);
         if (type == null || type.isAir() || tag == null) return stack;
+        // The content's tag has one of three formats, depending on the version that stored it:
+        if (LegacyComponentUpgrader.isLegacyItemTag(tag)) {
+            // 1.15.2: the content's item NBT; Minecraft's DataFixer converts it
+            ItemStack upgraded = LegacyComponentUpgrader.upgrade(type, tag);
+            if (upgraded != null) return upgraded;
+        } else if (ItemUtil.isComponentTag(tag)) {
+            // 1.6.4 and later: the content's components
+            try {
+                return CraftItemStack.asBukkitCopy(ItemUtil.applyComponentPatch(CraftItemStack.asNMSCopy(stack), tag));
+            } catch (RuntimeException e) {
+                org.bukkit.Bukkit.getLogger().warning("[StorageBox] Could not apply the components of a Storage Box of " + type + ": " + e.getMessage());
+            }
+        }
+        // 1.21 before 1.6.4: the content's custom_data
         net.minecraft.world.item.ItemStack nms = CraftItemStack.asNMSCopy(stack);
-        nms = ItemUtil.applyRawComponentsTag(nms, tag);
+        nms.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
         return CraftItemStack.asBukkitCopy(nms);
     }
 
@@ -144,7 +159,8 @@ public class StorageBox {
         ItemStack item = new ItemStack(itemType);
         CompoundTag tag = new CompoundTag();
         if (this.tag != null) {
-            tag.merge(this.tag); // for block state
+            // for block state (a tag of component ids is not the item's NBT and is not merged)
+            if (!ItemUtil.isComponentTag(this.tag)) tag.merge(this.tag);
             tag.put("storageBoxTag", this.tag.copy());
             tag.remove("MYTHIC_TYPE");
             tag.remove("AttributeModifiers");
@@ -226,10 +242,15 @@ public class StorageBox {
     }
 
     public void setTag(@Nullable CompoundTag tag) {
-        if (tag != null && tag.contains("storageBoxAmount")) {
+        if (tag != null && (tag.contains("storageBoxAmount") || containsStorageBox(tag))) {
             throw new IllegalArgumentException("StorageBox cannot contain StorageBox");
         }
         this.tag = tag;
+    }
+
+    /** A component patch of a Storage Box keeps the box's tags inside minecraft:custom_data. */
+    private static boolean containsStorageBox(CompoundTag tag) {
+        return tag.getCompound("minecraft:custom_data").map(c -> c.contains("storageBoxAmount")).orElse(false);
     }
 
     public boolean isEmpty() {
@@ -258,9 +279,7 @@ public class StorageBox {
     }
 
     public void importComponent(@NotNull ItemStack stack) {
-        CompoundTag tag = ItemUtil.getCustomData(stack);
-        if (tag != null && tag.isEmpty()) tag = null;
-        this.setTag(tag);
+        this.setTag(ItemUtil.getComponentPatch(stack));
         this.type = stack.getType();
         this.amount = stack.getAmount();
     }

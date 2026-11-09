@@ -1,6 +1,9 @@
 package xyz.acrylicstyle.storageBox.utils;
 
 import net.minecraft.core.component.DataComponentMap;
+import net.minecraft.core.component.DataComponentPatch;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.world.item.component.CustomData;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.Tag;
@@ -15,6 +18,7 @@ import org.jetbrains.annotations.Nullable;
 import org.jspecify.annotations.NonNull;
 
 import java.util.List;
+import java.util.regex.Pattern;
 
 public class ItemUtil {
     public static @Nullable CompoundTag getCustomData(@Nullable ItemStack bukkitItem) {
@@ -43,6 +47,48 @@ public class ItemUtil {
         }
 
         return new CompoundTag();
+    }
+
+    /** The item's minecraft:custom_data compound (where a Storage Box keeps its own tags), or null. */
+    public static @Nullable CompoundTag getRawCustomData(@Nullable ItemStack stack) {
+        if (stack == null || stack.getType().isAir()) return null;
+        CustomData customData = CraftItemStack.asNMSCopy(stack).get(DataComponents.CUSTOM_DATA);
+        if (customData == null) return null;
+        return customData.copyTag();
+    }
+
+    /**
+     * The item's components that differ from its type's defaults, or null when there are none.
+     * This is what a Storage Box stores as the content's tag.
+     */
+    public static @Nullable CompoundTag getComponentPatch(@Nullable ItemStack stack) {
+        if (stack == null || stack.getType().isAir()) return null;
+        DataComponentPatch patch = CraftItemStack.asNMSCopy(stack).getComponentsPatch();
+        if (patch.isEmpty()) return null;
+        var serializationContext = ((CraftServer) Bukkit.getServer()).getServer().registryAccess()
+                .createSerializationContext(NbtOps.INSTANCE);
+        Tag encoded = DataComponentPatch.CODEC.encodeStart(serializationContext, patch).getOrThrow();
+        return encoded instanceof CompoundTag compound && !compound.isEmpty() ? compound : null;
+    }
+
+    private static final Pattern COMPONENT_KEY = Pattern.compile("!?[a-z0-9_.-]+:[a-z0-9_./-]+");
+
+    /** True if every key of the tag is a component id ("minecraft:custom_name", "!minecraft:food"...). */
+    public static boolean isComponentTag(@Nullable CompoundTag tag) {
+        if (tag == null || tag.isEmpty()) return false;
+        for (String key : tag.keySet()) {
+            if (!COMPONENT_KEY.matcher(key).matches()) return false;
+        }
+        return true;
+    }
+
+    /** Applies a component patch (or a full component map, as written by 1.6.4) to the item. */
+    public static net.minecraft.world.item.ItemStack applyComponentPatch(net.minecraft.world.item.ItemStack nmsItem, CompoundTag tag) {
+        var serializationContext = ((CraftServer) Bukkit.getServer()).getServer().registryAccess()
+                .createSerializationContext(NbtOps.INSTANCE);
+        DataComponentPatch patch = DataComponentPatch.CODEC.parse(serializationContext, tag).getOrThrow();
+        nmsItem.applyComponents(patch);
+        return nmsItem;
     }
 
     public static net.minecraft.world.item.ItemStack applyRawComponentsTag(net.minecraft.world.item.ItemStack nmsItem, CompoundTag rawComponentsTag) {
@@ -76,7 +122,7 @@ public class ItemUtil {
     }
 
     public static @NotNull String getStringTag(@NotNull ItemStack item, @NotNull String key) {
-        CompoundTag tag = getCustomData(item);
+        CompoundTag tag = getRawCustomData(item);
         if (tag == null) return "";
         return tag.getString(key).orElse("");
     }
