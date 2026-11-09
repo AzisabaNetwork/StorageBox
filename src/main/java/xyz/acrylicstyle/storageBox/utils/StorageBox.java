@@ -42,6 +42,10 @@ public class StorageBox {
     private static final NamespacedKey KEY_MYTHIC_TYPE = new NamespacedKey("mythicmobs", "type");
     @SuppressWarnings("deprecation")
     private static final NamespacedKey KEY_SOULBOUND = new NamespacedKey("soulbound", "soulbound");
+    /** Written by every box this version creates; boxes without it are rewritten once by StorageBoxUpgrader. */
+    @SuppressWarnings("deprecation")
+    public static final NamespacedKey KEY_FORMAT = new NamespacedKey("storagebox", "format");
+    public static final int CURRENT_FORMAT = 1;
 
     private static final Set<Material> opaqueExempt = new HashSet<>(Arrays.asList(
             Material.COAL, Material.CHARCOAL, Material.DIAMOND, Material.EMERALD, Material.STICK, Material.DEBUG_STICK,
@@ -642,6 +646,7 @@ public class StorageBox {
         pdc.set(KEY_AUTO_COLLECT, PersistentDataType.BYTE, (byte) (this.autoCollect ? 1 : 0));
         pdc.set(KEY_AUTO_BUY, PersistentDataType.BYTE, (byte) (this.autoBuy ? 1 : 0));
         pdc.set(KEY_UUID, PersistentDataType.STRING, id);
+        pdc.set(KEY_FORMAT, PersistentDataType.INTEGER, CURRENT_FORMAT);
 
         if (this.serializedComponent == null && this.type != null && !this.type.isAir()) {
             ItemStack compStack = getComponentItemStack();

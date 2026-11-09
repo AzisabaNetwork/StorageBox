@@ -17,6 +17,10 @@ import java.util.List;
 public class RootCommand implements CommandExecutor {
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, String[] args) {
+        if (args.length >= 1 && args[0].equalsIgnoreCase("upgrade")) {
+            UpgradeCommand.onCommand(sender, Arrays.copyOfRange(args, 1, args.length));
+            return true;
+        }
         if (!(sender instanceof Player)) {
             if (args.length == 0) {
                 sender.sendMessage("/sb give <player>");
@@ -81,6 +85,7 @@ public class RootCommand implements CommandExecutor {
         sender.sendMessage(help("changetype", "オフハンドのアイテムをStorage Boxの中身にします。"));
         sender.sendMessage(help("collect", "足元の同種アイテムをStorage Boxへ回収します。"));
         sender.sendMessage(help("convert", "Storage Boxの見た目を更新します。"));
+        sender.sendMessage(help("upgrade", "インベントリとエンダーチェストの古いStorage Boxを今の形式に更新します。"));
         sender.sendMessage(help("extract <数>", "Storage Boxから中身を取り出します。"));
         sender.sendMessage(help("new", "新しいStorage Boxを取得します。"));
         sender.sendMessage(help("sell [数]", "Storage Box内のアイテムを売却します。"));

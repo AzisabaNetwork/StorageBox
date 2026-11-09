@@ -81,6 +81,9 @@ public class StorageBoxPlugin extends JavaPlugin implements Listener {
 
         Bukkit.getPluginManager().registerEvents(this, this);
         Bukkit.getPluginManager().registerEvents(new ShopScreen.EventListener(), this);
+        if (getConfig().getBoolean("legacy-upgrade.auto", true)) {
+            Bukkit.getPluginManager().registerEvents(new xyz.acrylicstyle.storageBox.listener.LegacyUpgradeListener(this), this);
+        }
 
         if (!getConfig().getBoolean("disable-crafting", false)) {
             try {

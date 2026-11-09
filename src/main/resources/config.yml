@@ -7,3 +7,8 @@ sellPrices:
   STONE: 1
 buyPrices:
   STONE: 100
+# Rewrite Storage Boxes saved by older versions (1.15.2...) into the current format automatically:
+# in the player's inventory and ender chest after joining, and in chests/EnderChestPlus pages when opened.
+# "/sb upgrade" (own inventory) and "/sb upgrade all" (all online players, storagebox.op) do the same on demand.
+legacy-upgrade:
+  auto: true

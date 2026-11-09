@@ -7,6 +7,7 @@ import org.bukkit.command.TabCompleter;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -29,7 +30,8 @@ public class StorageBoxTabCompleter implements TabCompleter {
             "buy",
             "shop",
             "gomi",
-            "merge"
+            "merge",
+            "upgrade"
     );
 
     private static final List<String> opCommands = Arrays.asList(
@@ -47,7 +49,8 @@ public class StorageBoxTabCompleter implements TabCompleter {
             "buy",
             "shop",
             "gomi",
-            "merge"
+            "merge",
+            "upgrade"
     );
 
     private static List<String> materials = null;
@@ -65,6 +68,9 @@ public class StorageBoxTabCompleter implements TabCompleter {
             if (sender.hasPermission("storagebox.op")) {
                 if (args[0].equals("settype")) {
                     return filterArgsList(materials, args[1]);
+                }
+                if (args[0].equalsIgnoreCase("upgrade")) {
+                    return filterArgsList(Collections.singletonList("all"), args[1]);
                 }
             }
         }
