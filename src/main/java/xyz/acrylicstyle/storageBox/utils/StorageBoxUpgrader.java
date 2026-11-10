@@ -7,6 +7,7 @@ import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.BlockStateMeta;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
 import org.jetbrains.annotations.Nullable;
 
@@ -30,15 +31,25 @@ public final class StorageBoxUpgrader {
     public static @Nullable ItemStack upgrade(@Nullable ItemStack item) {
         if (item == null || item.getType().isAir()) return null;
         ItemMeta meta = item.getItemMeta();
-        if (meta != null) {
-            Integer format = meta.getPersistentDataContainer().get(StorageBox.KEY_FORMAT, PersistentDataType.INTEGER);
-            if (format != null && format >= StorageBox.CURRENT_FORMAT) return null;
-        }
+        if (meta != null && isCurrent(meta.getPersistentDataContainer())) return null;
         StorageBox box = StorageBox.getStorageBox(item);
         if (box == null) return null;
         ItemStack upgraded = box.getItemStack();
         upgraded.setAmount(item.getAmount());
         return upgraded;
+    }
+
+    /**
+     * Whether the box was written by this version and is complete. A box with content always gets its serialized
+     * content from {@link StorageBox#getItemStack()}; when it is missing, another plugin restored the box's tags
+     * (e.g. EnderChestPlus /ecp storagebox removes the stale component_data), so the box is rewritten again.
+     */
+    private static boolean isCurrent(PersistentDataContainer pdc) {
+        Integer format = pdc.get(StorageBox.KEY_FORMAT, PersistentDataType.INTEGER);
+        if (format == null || format < StorageBox.CURRENT_FORMAT) return false;
+        String type = pdc.get(StorageBox.KEY_TYPE, PersistentDataType.STRING);
+        boolean hasContent = type != null && !type.isEmpty() && !type.equalsIgnoreCase("null");
+        return !hasContent || pdc.has(StorageBox.KEY_COMPONENT_DATA, PersistentDataType.STRING);
     }
 
     /** @return the number of rewritten boxes (including those inside shulker boxes) */

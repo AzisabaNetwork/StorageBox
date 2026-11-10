@@ -45,7 +45,8 @@ public class StorageBox {
     /** Written by every box this version creates; boxes without it are rewritten once by StorageBoxUpgrader. */
     @SuppressWarnings("deprecation")
     public static final NamespacedKey KEY_FORMAT = new NamespacedKey("storagebox", "format");
-    public static final int CURRENT_FORMAT = 1;
+    /** 2: boxes whose content got the box's own lore are repaired */
+    public static final int CURRENT_FORMAT = 2;
 
     private static final Set<Material> opaqueExempt = new HashSet<>(Arrays.asList(
             Material.COAL, Material.CHARCOAL, Material.DIAMOND, Material.EMERALD, Material.STICK, Material.DEBUG_STICK,
@@ -380,6 +381,7 @@ public class StorageBox {
                 return mythic.clone();
             }
             if (upgraded != null) {
+                stripStorageBoxDisplay(upgraded);
                 if (!legacyComponentUpgraded || serializedComponent == null) {
                     this.serializedComponent = serializeItemStack(upgraded);
                     legacyComponentUpgraded = true;
@@ -391,6 +393,10 @@ public class StorageBox {
         if (serializedComponent != null && !serializedComponent.isEmpty()) {
             ItemStack deserialized = deserializeItemStack(serializedComponent);
             if (deserialized != null) {
+                // repairs boxes whose saved content got the box's own lore (getItemStack saves it)
+                if (stripStorageBoxDisplay(deserialized)) {
+                    this.serializedComponent = serializeItemStack(deserialized);
+                }
                 return deserialized;
             }
         }
@@ -459,6 +465,7 @@ public class StorageBox {
             restoreSoulboundToPdc(tag, meta);
 
             stack.setItemMeta(meta);
+            stripStorageBoxDisplay(stack);
         }
 
         if (this.serializedComponent == null) {
@@ -648,9 +655,10 @@ public class StorageBox {
         pdc.set(KEY_UUID, PersistentDataType.STRING, id);
         pdc.set(KEY_FORMAT, PersistentDataType.INTEGER, CURRENT_FORMAT);
 
-        if (this.serializedComponent == null && this.type != null && !this.type.isAir()) {
+        if (this.type != null && !this.type.isAir()) {
+            // resolve the content first: it may replace serializedComponent (legacy upgrade, repairs)
             ItemStack compStack = getComponentItemStack();
-            if (compStack != null && !compStack.getType().isAir()) {
+            if (this.serializedComponent == null && compStack != null && !compStack.getType().isAir()) {
                 this.serializedComponent = serializeItemStack(compStack);
             }
         }
@@ -848,7 +856,7 @@ public class StorageBox {
         if (storageBoxTag != null && !storageBoxTag.isEmpty()) {
             NBTCompound copy = storageBoxTag.copy();
             cleanStorageBoxDisplayName(copy);
-            return copy;
+            return copy.isEmpty() ? null : copy;
         }
         if (tag.getTagOrNull("display") != null || tag.getTagOrNull("Enchantments") != null || tag.getTagOrNull("soulbound") != null) {
             NBTCompound copy = tag.copy();
@@ -866,15 +874,99 @@ public class StorageBox {
 
     private static void cleanStorageBoxDisplayName(@NotNull NBTCompound tag) {
         NBTCompound display = tag.getCompoundTagOrNull("display");
-        if (display != null) {
-            String name = display.getStringTagValueOrNull("Name");
-            if (name != null) {
-                String stripped = ChatColor.stripColor(parseLegacyOrJsonText(name));
-                if (stripped != null && stripped.startsWith("Storage Box")) {
-                    tag.removeTag("display");
-                }
+        if (display == null) return;
+        String name = display.getStringTagValueOrNull("Name");
+        if (name != null) {
+            String stripped = ChatColor.stripColor(parseLegacyOrJsonText(name));
+            if (stripped != null && stripped.startsWith("Storage Box")) {
+                tag.removeTag("display");
+                return;
             }
         }
+        // Older versions copied the box's own lore (without its name) into storageBoxTag
+        NBTList<NBTString> loreList = display.getStringListTagOrNull("Lore");
+        if (loreList != null) {
+            List<String> lore = new ArrayList<>();
+            for (NBTString s : loreList.getTags()) lore.add(parseLegacyOrJsonText(s.getValue()));
+            if (isStorageBoxLore(lore)) {
+                // keep the content's own lines, drop only the box's
+                NBTList<NBTString> kept = NBTList.createStringList();
+                for (int i = 0; i < lore.size(); i++) {
+                    if (!isStorageBoxLoreLine(lore.get(i))) kept.addTag(loreList.getTag(i));
+                }
+                if (kept.isEmpty()) {
+                    display.removeTag("Lore");
+                } else {
+                    display.setTag("Lore", kept);
+                }
+                if (display.isEmpty()) tag.removeTag("display");
+            }
+        }
+    }
+
+    private static final String[] STORAGE_BOX_LORE_PREFIXES = {"数:", "自動回収:", "自動購入:", "NBTタグ:", "不透明:", "ID:"};
+
+    /** A line of the lore a Storage Box writes on itself. */
+    private static boolean isStorageBoxLoreLine(@Nullable String raw) {
+        String line = raw == null ? null : ChatColor.stripColor(raw);
+        if (line == null) return false;
+        line = line.trim();
+        for (String prefix : STORAGE_BOX_LORE_PREFIXES) {
+            if (line.startsWith(prefix)) return true;
+        }
+        return false;
+    }
+
+    /** Whether the lore is the one a Storage Box writes on itself ("数: n", ..., "ID: uuid"). */
+    static boolean isStorageBoxLore(@Nullable List<String> lore) {
+        if (lore == null || lore.isEmpty()) return false;
+        boolean hasAmount = false;
+        boolean hasId = false;
+        for (String raw : lore) {
+            String line = raw == null ? null : ChatColor.stripColor(raw);
+            if (line == null) continue;
+            line = line.trim();
+            if (line.startsWith("数:")) {
+                hasAmount = true;
+            } else if (line.startsWith("ID:")) {
+                try {
+                    UUID.fromString(line.substring(3).trim());
+                    hasId = true;
+                } catch (IllegalArgumentException ignored) {}
+            }
+        }
+        return hasAmount && hasId;
+    }
+
+    /**
+     * Removes the box's own name and lore that older versions put on the content.
+     * @return true when the item was changed
+     */
+    @SuppressWarnings("deprecation")
+    private static boolean stripStorageBoxDisplay(@NotNull ItemStack stack) {
+        if (!stack.hasItemMeta()) return false;
+        ItemMeta meta = stack.getItemMeta();
+        if (meta == null) return false;
+        boolean changed = false;
+        List<String> lore = meta.hasLore() ? meta.getLore() : null;
+        if (isStorageBoxLore(lore)) {
+            // keep the content's own lines, drop only the box's
+            List<String> kept = new ArrayList<>();
+            for (String line : lore) {
+                if (!isStorageBoxLoreLine(line)) kept.add(line);
+            }
+            meta.setLore(kept.isEmpty() ? null : kept);
+            changed = true;
+        }
+        if (meta.hasDisplayName()) {
+            String stripped = ChatColor.stripColor(meta.getDisplayName());
+            if (stripped != null && stripped.startsWith("Storage Box")) {
+                meta.setDisplayName(null);
+                changed = true;
+            }
+        }
+        if (changed) stack.setItemMeta(meta);
+        return changed;
     }
 
     @SuppressWarnings("deprecation")
