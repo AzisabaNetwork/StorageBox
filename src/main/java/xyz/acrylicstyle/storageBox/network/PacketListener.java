@@ -12,6 +12,8 @@ import com.github.retrooper.packetevents.protocol.nbt.NBTNumber;
 import com.github.retrooper.packetevents.protocol.packettype.PacketType;
 import com.github.retrooper.packetevents.protocol.player.Equipment;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityEquipment;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerSetCursorItem;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerSetPlayerInventory;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerSetSlot;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerWindowItems;
 
@@ -46,6 +48,21 @@ public class PacketListener extends PacketListenerAbstract {
             if (modified) {
                 packet.setItems(rewrittenItems);
             }
+            // the item on the cursor is sent with the window's items
+            packet.getCarriedItem().ifPresent(carried -> {
+                ItemStack rewritten = rewriteItem(carried);
+                if (rewritten != null) packet.setCarriedItem(rewritten);
+            });
+        } else if (event.getPacketType() == PacketType.Play.Server.SET_PLAYER_INVENTORY) {
+            // 1.21.2+: slots of the player's own inventory (e.g. set by plugins while no container is open)
+            WrapperPlayServerSetPlayerInventory packet = new WrapperPlayServerSetPlayerInventory(event);
+            ItemStack rewritten = rewriteItem(packet.getStack());
+            if (rewritten != null) packet.setStack(rewritten);
+        } else if (event.getPacketType() == PacketType.Play.Server.SET_CURSOR_ITEM) {
+            // 1.21.2+: the item on the cursor
+            WrapperPlayServerSetCursorItem packet = new WrapperPlayServerSetCursorItem(event);
+            ItemStack rewritten = rewriteItem(packet.getStack());
+            if (rewritten != null) packet.setStack(rewritten);
         } else if (event.getPacketType() == PacketType.Play.Server.ENTITY_EQUIPMENT) {
             WrapperPlayServerEntityEquipment packet = new WrapperPlayServerEntityEquipment(event);
             List<Equipment> equipmentList = packet.getEquipment();
