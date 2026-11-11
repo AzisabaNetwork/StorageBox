@@ -45,8 +45,11 @@ public class StorageBox {
     /** Written by every box this version creates; boxes without it are rewritten once by StorageBoxUpgrader. */
     @SuppressWarnings("deprecation")
     public static final NamespacedKey KEY_FORMAT = new NamespacedKey("storagebox", "format");
-    /** 2: boxes whose content got the box's own lore are repaired */
-    public static final int CURRENT_FORMAT = 2;
+    /**
+     * 2: boxes whose content got the box's own lore are repaired;
+     * 3: 1.15.2 item tags (display...) left in the box's own custom_data are removed
+     */
+    public static final int CURRENT_FORMAT = 3;
 
     private static final Set<Material> opaqueExempt = new HashSet<>(Arrays.asList(
             Material.COAL, Material.CHARCOAL, Material.DIAMOND, Material.EMERALD, Material.STICK, Material.DEBUG_STICK,
@@ -132,7 +135,8 @@ public class StorageBox {
                                 } catch (Throwable ignored) {}
                             }
                             if (peNBT != null) {
-                                storageBoxTag = extractStorageBoxTag(peNBT);
+                                // The box's own custom_data is never its content here (see extractStorageBoxTag)
+                                storageBoxTag = extractStorageBoxTag(peNBT, false);
                             }
                         }
 
@@ -204,7 +208,7 @@ public class StorageBox {
                 }
             }
 
-            NBTCompound storageBoxTag = extractStorageBoxTag(rootTag);
+            NBTCompound storageBoxTag = extractStorageBoxTag(rootTag, true);
             String uuidStr = rootTag.getStringTagValueOrNull("randomUUID");
             UUID randomUUID = uuidStr != null ? UUID.fromString(uuidStr) : null;
             return new StorageBox(type, amount, autoCollect, autoBuy, autoBuyConfigured, storageBoxTag, null, randomUUID);
@@ -848,7 +852,35 @@ public class StorageBox {
         return null;
     }
 
-    private static @Nullable NBTCompound extractStorageBoxTag(@NotNull NBTCompound tag) {
+    /**
+     * @param rootFallback whether the box's own tag may stand for its content when there is no storageBoxTag. Only
+     *                     for boxes without PDC data: a box written by this plugin always keeps its content in
+     *                     storageBoxTag / component_data, and other tags on it (e.g. a {@code display} with the box's
+     *                     own lore left in custom_data) would otherwise replace the real content with a plain item.
+     */
+    /**
+     * Whether the box's own tag (custom_data) has item tags of 1.15.2 such as {@code display} next to the box data.
+     * Boxes written by {@link #getItemStack()} never have them; older plugin versions (1.7.3 and before) read them as
+     * the box's content and replace the real content, so such boxes are rewritten without them.
+     */
+    public static boolean hasStrayItemTags(@NotNull ItemStack box) {
+        try {
+            com.github.retrooper.packetevents.protocol.item.ItemStack peItem = SpigotConversionUtil.fromBukkitItemStack(box);
+            if (peItem == null) return false;
+            // custom_data only: before 1.20.5 the item's own NBT rightly holds the box's display
+            NBTCompound customData;
+            try {
+                customData = peItem.getComponentOr(ComponentTypes.CUSTOM_DATA, null);
+            } catch (Throwable ignored) {
+                return false;
+            }
+            return LegacyComponentUpgrader.isLegacyItemTag(customData);
+        } catch (RuntimeException e) {
+            return false;
+        }
+    }
+
+    private static @Nullable NBTCompound extractStorageBoxTag(@NotNull NBTCompound tag, boolean rootFallback) {
         NBTCompound storageBoxTag = tag.getCompoundTagOrNull("storageBoxTag");
         if (storageBoxTag != null && storageBoxTag.getTagOrNull("storageBoxAmount") != null) {
             throw new IllegalArgumentException("StorageBox cannot contain StorageBox");
@@ -858,6 +890,7 @@ public class StorageBox {
             cleanStorageBoxDisplayName(copy);
             return copy.isEmpty() ? null : copy;
         }
+        if (!rootFallback) return null;
         if (tag.getTagOrNull("display") != null || tag.getTagOrNull("Enchantments") != null || tag.getTagOrNull("soulbound") != null) {
             NBTCompound copy = tag.copy();
             copy.removeTag("storageBoxType");

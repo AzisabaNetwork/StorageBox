@@ -31,7 +31,7 @@ public final class StorageBoxUpgrader {
     public static @Nullable ItemStack upgrade(@Nullable ItemStack item) {
         if (item == null || item.getType().isAir()) return null;
         ItemMeta meta = item.getItemMeta();
-        if (meta != null && isCurrent(meta.getPersistentDataContainer())) return null;
+        if (meta != null && isCurrent(meta.getPersistentDataContainer()) && !StorageBox.hasStrayItemTags(item)) return null;
         StorageBox box = StorageBox.getStorageBox(item);
         if (box == null) return null;
         ItemStack upgraded = box.getItemStack();
