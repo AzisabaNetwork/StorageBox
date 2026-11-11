@@ -22,6 +22,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import xyz.acrylicstyle.storageBox.StorageBoxPlugin;
 
+import java.lang.reflect.Method;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -47,9 +48,10 @@ public class StorageBox {
     public static final NamespacedKey KEY_FORMAT = new NamespacedKey("storagebox", "format");
     /**
      * 2: boxes whose content got the box's own lore are repaired;
-     * 3: 1.15.2 item tags (display...) left in the box's own custom_data are removed
+     * 3: 1.15.2 item tags (display...) left in the box's own custom_data are removed;
+     * 4: boxes of items (shown as a stick) carry the content's item model (1.21.4+)
      */
-    public static final int CURRENT_FORMAT = 3;
+    public static final int CURRENT_FORMAT = 4;
 
     private static final Set<Material> opaqueExempt = new HashSet<>(Arrays.asList(
             Material.COAL, Material.CHARCOAL, Material.DIAMOND, Material.EMERALD, Material.STICK, Material.DEBUG_STICK,
@@ -690,6 +692,9 @@ public class StorageBox {
             // the box looks like its content (PacketListener also shows the content's material)
             Integer contentModel = contentCustomModelData();
             if (contentModel != null) meta.setCustomModelData(contentModel);
+            // 1.21.4+: the box itself carries the content's model, so it looks like its content everywhere
+            // (dropped, item frames, other plugins' GUIs...), not only in the packets PacketListener rewrites
+            if (item.getType() != type) setItemModel(meta, contentItemModel());
         }
         if (amount > 0) {
             meta.addEnchant(Enchantment.DURABILITY, 1, true);
@@ -821,6 +826,46 @@ public class StorageBox {
         }
         if (!LegacyComponentUpgrader.isLegacyItemTag(customData)) return null;
         return LegacyComponentUpgrader.currentMythicItem(content.getType(), customData, content);
+    }
+
+    private static volatile boolean itemModelChecked;
+    private static volatile @Nullable Method getItemModel;
+    private static volatile @Nullable Method setItemModel;
+
+    private static boolean itemModelSupported() {
+        if (!itemModelChecked) {
+            try {
+                getItemModel = ItemMeta.class.getMethod("getItemModel");
+                setItemModel = ItemMeta.class.getMethod("setItemModel", NamespacedKey.class);
+            } catch (NoSuchMethodException e) {
+                getItemModel = null; // before 1.21.4
+                setItemModel = null;
+            }
+            itemModelChecked = true;
+        }
+        return setItemModel != null;
+    }
+
+    /** The content's item model (its own item_model, else its material's), or null before 1.21.4. */
+    private @Nullable NamespacedKey contentItemModel() {
+        if (type == null || type.isAir() || !itemModelSupported()) return null;
+        try {
+            ItemStack content = getComponentItemStack();
+            if (content != null && !content.getType().isAir() && content.hasItemMeta()) {
+                Object model = Objects.requireNonNull(getItemModel).invoke(content.getItemMeta());
+                if (model instanceof NamespacedKey) return (NamespacedKey) model;
+            }
+            return (content != null && !content.getType().isAir() ? content.getType() : type).getKey();
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            return type.getKey();
+        }
+    }
+
+    private static void setItemModel(@NotNull ItemMeta meta, @Nullable NamespacedKey model) {
+        if (model == null || !itemModelSupported()) return;
+        try {
+            Objects.requireNonNull(setItemModel).invoke(meta, model);
+        } catch (ReflectiveOperationException | RuntimeException ignored) {}
     }
 
     /** The content's custom model data, or null when it has none. */
