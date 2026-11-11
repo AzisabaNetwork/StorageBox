@@ -20,8 +20,16 @@ public class ExtractCommand {
         int amount;
         try {
             if (args.length == 0 || args[0].equalsIgnoreCase("all")) {
-                amount = (int) Math.min(storageBox.getAmount() > 1 ? storageBox.getAmount() - 1 : 1,
-                        StorageBoxPlugin.getEmptySlots(player) * (long) maxStackSize);
+                if (storageBox.getAmount() <= 0) {
+                    player.sendMessage(ChatColor.RED + "Storage Boxにアイテムが入っていません。");
+                    return;
+                }
+                // everything that fits (the box keeps its type when it becomes empty)
+                amount = (int) Math.min(storageBox.getAmount(), StorageBoxPlugin.getEmptySlots(player) * (long) maxStackSize);
+                if (amount <= 0) {
+                    player.sendMessage(ChatColor.RED + "インベントリの空きスペースが足りません。");
+                    return;
+                }
             } else {
                 amount = Integer.parseInt(args[0]);
             }
