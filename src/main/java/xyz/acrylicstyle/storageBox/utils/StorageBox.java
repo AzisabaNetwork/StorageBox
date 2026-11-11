@@ -401,6 +401,12 @@ public class StorageBox {
                 if (stripStorageBoxDisplay(deserialized)) {
                     this.serializedComponent = serializeItemStack(deserialized);
                 }
+                ItemStack mythic = currentMythicItemOfConvertedContent(deserialized);
+                if (mythic != null) {
+                    // same as 1.15.2 tags above: the box holds today's MythicMobs item (getItemStack saves it)
+                    adoptComponent(mythic);
+                    return mythic.clone();
+                }
                 return deserialized;
             }
         }
@@ -795,6 +801,26 @@ public class StorageBox {
         this.serializedComponent = serializeItemStack(stack);
         this.type = stack.getType();
         this.amount = stack.getAmount();
+    }
+
+    /**
+     * The current MythicMobs item for content converted from 1.15.2 by hand (older versions and migrations): such
+     * content has no MMID but keeps the 1.15.2 tags (display, CustomModelData...) in its custom_data, so it neither
+     * matches the items MythicMobs drops today nor auto-collects them. MythicItemIdCompat identifies it from its
+     * name and lore. Null when the content is not such an item or cannot be identified.
+     */
+    private static @Nullable ItemStack currentMythicItemOfConvertedContent(@NotNull ItemStack content) {
+        if (content.getType().isAir() || mythicId(content) != null) return null;
+        NBTCompound customData;
+        try {
+            com.github.retrooper.packetevents.protocol.item.ItemStack peItem = SpigotConversionUtil.fromBukkitItemStack(content);
+            if (peItem == null) return null;
+            customData = peItem.getComponentOr(ComponentTypes.CUSTOM_DATA, null);
+        } catch (Throwable e) {
+            return null; // before 1.20.5: no custom_data component
+        }
+        if (!LegacyComponentUpgrader.isLegacyItemTag(customData)) return null;
+        return LegacyComponentUpgrader.currentMythicItem(content.getType(), customData, content);
     }
 
     /** The content's custom model data, or null when it has none. */
