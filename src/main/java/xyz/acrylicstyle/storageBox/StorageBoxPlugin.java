@@ -8,7 +8,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import io.github.retrooper.packetevents.factory.spigot.SpigotPacketEventsBuilder;
+import com.github.retrooper.packetevents.event.PacketListenerCommon;
 import io.github.retrooper.packetevents.util.SpigotConversionUtil;
 import net.md_5.bungee.api.ChatMessageType;
 import net.md_5.bungee.api.chat.TextComponent;
@@ -60,13 +60,12 @@ public class StorageBoxPlugin extends JavaPlugin implements Listener {
     public final Map<ItemStack, Long> buyPrices = new ConcurrentHashMap<>();
     public final Map<ItemStack, Long> sellPrices = new ConcurrentHashMap<>();
 
-    @Override
-    public void onLoad() {
-        if (!PacketEvents.getAPI().isLoaded()) {
-            PacketEvents.setAPI(SpigotPacketEventsBuilder.build(this));
-            PacketEvents.getAPI().load();
-        }
-    }
+    /**
+     * This plugin's listener. packetevents itself is the server's packetevents plugin (depend in plugin.yml), which
+     * loads, initializes and terminates its API on its own: building or terminating it here would replace it for
+     * every plugin, and on a hot reload the new instance does not know the online players (init() then fails).
+     */
+    private @Nullable PacketListenerCommon packetListener;
 
     @Override
     public void onEnable() {
@@ -97,10 +96,7 @@ public class StorageBoxPlugin extends JavaPlugin implements Listener {
             }
         }
 
-        if (!PacketEvents.getAPI().isInitialized()) {
-            PacketEvents.getAPI().init();
-        }
-        PacketEvents.getAPI().getEventManager().registerListener(new PacketListener());
+        packetListener = PacketEvents.getAPI().getEventManager().registerListener(new PacketListener());
 
         // delay init
         Bukkit.getScheduler().runTask(this, () -> {
@@ -219,8 +215,9 @@ public class StorageBoxPlugin extends JavaPlugin implements Listener {
 
     @Override
     public void onDisable() {
-        if (PacketEvents.getAPI().isInitialized()) {
-            PacketEvents.getAPI().terminate();
+        if (packetListener != null) {
+            PacketEvents.getAPI().getEventManager().unregisterListener(packetListener);
+            packetListener = null;
         }
     }
 
