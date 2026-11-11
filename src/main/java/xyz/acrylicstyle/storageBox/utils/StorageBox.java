@@ -38,6 +38,10 @@ public class StorageBox {
     public static final NamespacedKey KEY_UUID = new NamespacedKey("storagebox", "uuid");
     @SuppressWarnings("deprecation")
     public static final NamespacedKey KEY_COMPONENT_DATA = new NamespacedKey("storagebox", "component_data");
+    @SuppressWarnings("deprecation")
+    private static final NamespacedKey KEY_MYTHIC_TYPE = new NamespacedKey("mythicmobs", "type");
+    @SuppressWarnings("deprecation")
+    private static final NamespacedKey KEY_SOULBOUND = new NamespacedKey("soulbound", "soulbound");
 
     private static final Set<Material> opaqueExempt = new HashSet<>(Arrays.asList(
             Material.COAL, Material.CHARCOAL, Material.DIAMOND, Material.EMERALD, Material.STICK, Material.DEBUG_STICK,
@@ -497,7 +501,75 @@ public class StorageBox {
 
     public boolean isComponentItemStackSimilar(@Nullable ItemStack stack) {
         if (stack == null) return false;
-        return stack.isSimilar(getComponentItemStack());
+        ItemStack component = getComponentItemStack();
+        if (component == null) return false;
+        if (stack.isSimilar(component)) return true;
+        return isSameMythicItem(stack, component);
+    }
+
+    /**
+     * Whether two items are the same MythicMobs item even though their components differ.
+     * <p>
+     * Contents of 1.15.2 boxes (and items taken out of them) keep leftovers of the old format: the
+     * MythicMobs 4 {@code MYTHIC_TYPE} tag in custom_data, the DataFixer's text components, a stored
+     * snapshot of an older definition... {@link ItemStack#isSimilar} then tells them apart from the items
+     * MythicMobs drops today, so they neither auto-collect nor merge. Items with the same material and
+     * MMID are treated as the same item instead, unless they are soulbound to different players or the
+     * MMID is in MythicItemIdCompat's {@code excluded-mmids}.
+     */
+    static boolean isSameMythicItem(@NotNull ItemStack a, @NotNull ItemStack b) {
+        if (a.getType().isAir() || a.getType() != b.getType()) return false;
+        String id = mythicId(a);
+        if (id == null || !id.equals(mythicId(b))) return false;
+        if (!Objects.equals(soulbound(a), soulbound(b))) return false;
+        return !isMythicIdExcluded(id);
+    }
+
+    /** The item's MMID: MythicMobs 5 {@code mythicmobs:type}, else a leftover MythicMobs 4 {@code MYTHIC_TYPE}. */
+    static @Nullable String mythicId(@NotNull ItemStack item) {
+        if (item.getType().isAir()) return null;
+        try {
+            if (item.hasItemMeta()) {
+                ItemMeta meta = item.getItemMeta();
+                if (meta != null) {
+                    String id = meta.getPersistentDataContainer().get(KEY_MYTHIC_TYPE, PersistentDataType.STRING);
+                    if (id != null && !id.trim().isEmpty()) return id.trim();
+                }
+            }
+            String legacy = ItemUtil.getStringTag(item, "MYTHIC_TYPE").trim();
+            return legacy.isEmpty() ? null : legacy;
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
+    private static @Nullable String soulbound(@NotNull ItemStack item) {
+        if (!item.hasItemMeta()) return null;
+        ItemMeta meta = item.getItemMeta();
+        if (meta == null) return null;
+        try {
+            return meta.getPersistentDataContainer().get(KEY_SOULBOUND, PersistentDataType.STRING);
+        } catch (RuntimeException e) {
+            return null; // stored with another type
+        }
+    }
+
+    private static volatile @Nullable java.lang.reflect.Method isMythicIdExcluded;
+
+    /** MythicItemIdCompat's {@code excluded-mmids}; false when the plugin (1.4.0+) is not installed. */
+    private static boolean isMythicIdExcluded(@NotNull String id) {
+        org.bukkit.plugin.Plugin compat = Bukkit.getPluginManager().getPlugin("MythicItemIdCompat");
+        if (compat == null || !compat.isEnabled()) return false;
+        try {
+            java.lang.reflect.Method method = isMythicIdExcluded;
+            if (method == null || method.getDeclaringClass() != compat.getClass()) {
+                method = compat.getClass().getMethod("isMythicIdExcluded", String.class);
+                isMythicIdExcluded = method;
+            }
+            return Boolean.TRUE.equals(method.invoke(compat, id));
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            return false;
+        }
     }
 
     public @NotNull ItemStack getItemStack() {
