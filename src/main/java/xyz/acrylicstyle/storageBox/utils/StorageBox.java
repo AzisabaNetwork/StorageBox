@@ -380,7 +380,8 @@ public class StorageBox {
             // box was produced by the old hand-made conversion below, so it is replaced (getItemStack saves it).
             ItemStack upgraded = LegacyComponentUpgrader.upgrade(type, Objects.requireNonNull(tag));
             ItemStack mythic = upgraded == null ? null : LegacyComponentUpgrader.currentMythicItem(type, tag, upgraded);
-            if (mythic != null) {
+            // only when today's item has the very same texture and lore; otherwise the stored item is kept as it is
+            if (mythic != null && ItemNormalizer.sameTextureAndLore(mythic, upgraded)) {
                 // A MythicMobs item: the box holds the item MythicMobs generates today from now on
                 // (same name and lore; it stacks and auto-collects with new drops). getItemStack saves it.
                 adoptComponent(mythic);
@@ -404,7 +405,7 @@ public class StorageBox {
                     this.serializedComponent = serializeItemStack(deserialized);
                 }
                 ItemStack mythic = currentMythicItemOfConvertedContent(deserialized);
-                if (mythic != null) {
+                if (mythic != null && ItemNormalizer.sameTextureAndLore(mythic, deserialized)) {
                     // same as 1.15.2 tags above: the box holds today's MythicMobs item (getItemStack saves it)
                     adoptComponent(mythic);
                     return mythic.clone();
@@ -526,7 +527,8 @@ public class StorageBox {
         if (stack == null) return false;
         ItemStack component = getComponentItemStack();
         if (component == null) return false;
-        if (stack.isSimilar(component)) return true;
+        // normalized: the same 1.15.2 item differs in its data depending on which plugin converted it
+        if (ItemNormalizer.isSimilar(stack, component)) return true;
         return isSameMythicItem(stack, component);
     }
 
@@ -539,12 +541,16 @@ public class StorageBox {
      * MythicMobs drops today, so they neither auto-collect nor merge. Items with the same material and
      * MMID are treated as the same item instead, unless they are soulbound to different players or the
      * MMID is in MythicItemIdCompat's {@code excluded-mmids}.
+     * <p>
+     * The MMID alone is not enough: items of one MMID may differ in lore (stats kept in the lore) or texture
+     * (model, damage, dye, head skin). Any difference there makes them different items.
      */
     static boolean isSameMythicItem(@NotNull ItemStack a, @NotNull ItemStack b) {
         if (a.getType().isAir() || a.getType() != b.getType()) return false;
         String id = mythicId(a);
         if (id == null || !id.equals(mythicId(b))) return false;
         if (!Objects.equals(soulbound(a), soulbound(b))) return false;
+        if (!ItemNormalizer.sameTextureAndLore(a, b)) return false;
         return !isMythicIdExcluded(id);
     }
 
@@ -901,7 +907,7 @@ public class StorageBox {
 
     public static @Nullable String serializeItemStack(@Nullable ItemStack stack) {
         if (stack == null || stack.getType().isAir()) return null;
-        ItemStack clone = stack.clone();
+        ItemStack clone = ItemNormalizer.normalize(stack).clone();
         clone.setAmount(1);
         YamlConfiguration yaml = new YamlConfiguration();
         yaml.set("item", clone);
@@ -915,7 +921,8 @@ public class StorageBox {
             yaml.loadFromString(serialized);
             ItemStack item = yaml.getItemStack("item");
             if (item != null) {
-                item = item.clone();
+                // contents saved by older versions: same data as in AziSync, EnderChestPlus and ItemStash
+                item = ItemNormalizer.normalize(item).clone();
                 item.setAmount(1);
                 return item;
             }

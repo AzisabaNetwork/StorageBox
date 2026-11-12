@@ -5,6 +5,7 @@ import com.github.retrooper.packetevents.protocol.nbt.NBTByte;
 import com.github.retrooper.packetevents.protocol.nbt.NBTCompound;
 import com.github.retrooper.packetevents.protocol.nbt.NBTInt;
 import com.github.retrooper.packetevents.protocol.nbt.NBTList;
+import com.github.retrooper.packetevents.protocol.nbt.NBTNumber;
 import com.github.retrooper.packetevents.protocol.nbt.NBTString;
 import com.github.retrooper.packetevents.protocol.nbt.serializer.DefaultNBTSerializer;
 import org.bukkit.Bukkit;
@@ -126,7 +127,7 @@ public final class LegacyComponentUpgrader {
         if (method == null) return null;
         CacheKey key = new CacheKey(type, legacyTag);
         ItemStack cached = CACHE.get(key);
-        if (cached != null) return withMythicId(cached.clone());
+        if (cached != null) return ItemNormalizer.normalize(withMythicId(cached.clone()));
         if (FAILED.contains(key)) return null;
 
         NBTCompound tag = legacyTag.copy();
@@ -143,9 +144,12 @@ public final class LegacyComponentUpgrader {
                 fail(key, type, "the DataFixer returned no item");
                 return null;
             }
+            // the same 1.15.2 item must come out the same here, in AziSync, EnderChestPlus and ItemStash
+            NBT hideFlags = legacyTag.getTagOrNull("HideFlags");
+            item = ItemNormalizer.normalize(item, hideFlags instanceof NBTNumber ? ((NBTNumber) hideFlags).getAsInt() : 0);
             item.setAmount(1);
             CACHE.put(key, item.clone());
-            return withMythicId(item);
+            return ItemNormalizer.normalize(withMythicId(item)); // again: drops MYTHIC_TYPE once the MMID is set
         } catch (ReflectiveOperationException | IOException | RuntimeException e) {
             Throwable cause = e instanceof java.lang.reflect.InvocationTargetException ? e.getCause() : e;
             fail(key, type, cause == null ? String.valueOf(e) : cause.toString());
