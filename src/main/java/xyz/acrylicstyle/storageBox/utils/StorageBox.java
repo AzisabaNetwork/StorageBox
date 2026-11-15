@@ -540,7 +540,7 @@ public class StorageBox {
      * snapshot of an older definition... {@link ItemStack#isSimilar} then tells them apart from the items
      * MythicMobs drops today, so they neither auto-collect nor merge. Items with the same material and
      * MMID are treated as the same item instead, unless they are soulbound to different players or the
-     * MMID is in MythicItemIdCompat's {@code excluded-mmids}.
+     * MMID is in MythicItemFixer's {@code excluded-mmids}.
      * <p>
      * The MMID alone is not enough: items of one MMID may differ in lore (stats kept in the lore) or texture
      * (model, damage, dye, head skin). Any difference there makes them different items.
@@ -585,10 +585,10 @@ public class StorageBox {
 
     private static volatile @Nullable java.lang.reflect.Method isMythicIdExcluded;
 
-    /** MythicItemIdCompat's {@code excluded-mmids}; false when the plugin (1.4.0+) is not installed. */
+    /** MythicItemFixer's {@code excluded-mmids}; false when the plugin (1.4.0+) is not installed. */
     private static boolean isMythicIdExcluded(@NotNull String id) {
-        org.bukkit.plugin.Plugin compat = Bukkit.getPluginManager().getPlugin("MythicItemIdCompat");
-        if (compat == null || !compat.isEnabled()) return false;
+        org.bukkit.plugin.Plugin compat = LegacyComponentUpgrader.mythicItemPlugin();
+        if (compat == null) return false;
         try {
             java.lang.reflect.Method method = isMythicIdExcluded;
             if (method == null || method.getDeclaringClass() != compat.getClass()) {
@@ -817,7 +817,7 @@ public class StorageBox {
     /**
      * The current MythicMobs item for content converted from 1.15.2 by hand (older versions and migrations): such
      * content has no MMID but keeps the 1.15.2 tags (display, CustomModelData...) in its custom_data, so it neither
-     * matches the items MythicMobs drops today nor auto-collects them. MythicItemIdCompat identifies it from its
+     * matches the items MythicMobs drops today nor auto-collects them. MythicItemFixer identifies it from its
      * name and lore. Null when the content is not such an item or cannot be identified.
      */
     private static @Nullable ItemStack currentMythicItemOfConvertedContent(@NotNull ItemStack content) {

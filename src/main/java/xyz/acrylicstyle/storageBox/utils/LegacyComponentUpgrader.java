@@ -215,19 +215,29 @@ public final class LegacyComponentUpgrader {
     }
 
     /**
-     * Lets MythicItemIdCompat (if installed) add the MythicMobs 5 ID next to the MythicMobs 4 MYTHIC_TYPE tag,
-     * so the item taken out of the box is a working Mythic item right away. Only on the main thread.
+     * Lets MythicItemFixer (formerly MythicItemIdCompat) add the MythicMobs 5 ID next to the MythicMobs 4
+     * MYTHIC_TYPE tag, so the item taken out of the box is a working Mythic item right away. Only on the main thread.
      */
     private static @NotNull ItemStack withMythicId(@NotNull ItemStack item) {
         if (!Bukkit.isPrimaryThread()) return item;
-        Plugin compat = Bukkit.getPluginManager().getPlugin("MythicItemIdCompat");
-        if (compat == null || !compat.isEnabled()) return item;
+        Plugin compat = mythicItemPlugin();
+        if (compat == null) return item;
         try {
             compat.getClass().getMethod("preserveMythicId", ItemStack.class).invoke(compat, item);
         } catch (ReflectiveOperationException | RuntimeException ignored) {
-            // older MythicItemIdCompat without the API: it converts the item once it is in an inventory
+            // older plugin without the API: it converts the item once it is in an inventory
         }
         return item;
+    }
+
+    /**
+     * MythicItemFixer (or the older MythicItemIdCompat) when it is installed; both expose the same item API.
+     */
+    static @Nullable Plugin mythicItemPlugin() {
+        Plugin plugin = Bukkit.getPluginManager().getPlugin("MythicItemFixer");
+        if (plugin != null && plugin.isEnabled()) return plugin;
+        plugin = Bukkit.getPluginManager().getPlugin("MythicItemIdCompat");
+        return plugin != null && plugin.isEnabled() ? plugin : null;
     }
 
     /** MMIDs resolved per legacy tag ("" when the content is not a MythicMobs item). */
@@ -254,8 +264,8 @@ public final class LegacyComponentUpgrader {
     public static @Nullable ItemStack currentMythicItem(@NotNull Material type, @NotNull NBTCompound legacyTag,
                                                         @NotNull ItemStack upgraded) {
         if (!Bukkit.isPrimaryThread()) return null;
-        Plugin compat = Bukkit.getPluginManager().getPlugin("MythicItemIdCompat");
-        if (compat == null || !compat.isEnabled()) return null;
+        Plugin compat = mythicItemPlugin();
+        if (compat == null) return null;
         try {
             CacheKey key = new CacheKey(type, legacyTag);
             String id = MYTHIC_IDS.get(key);
@@ -271,7 +281,7 @@ public final class LegacyComponentUpgrader {
             item.setAmount(1);
             return item;
         } catch (NoSuchMethodException e) {
-            return null; // MythicItemIdCompat older than 1.5.0
+            return null; // MythicItemFixer older than 1.5.0
         } catch (ReflectiveOperationException | RuntimeException e) {
             Bukkit.getLogger().warning("[StorageBox] Could not look up the MythicMobs item of a 1.15.2 Storage Box: " + e);
             return null;
