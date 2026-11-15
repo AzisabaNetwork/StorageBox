@@ -98,6 +98,18 @@ public class StorageBox {
         this.randomUUID = randomUUID;
     }
 
+    /**
+     * Lightweight information about a Storage Box item, without fully parsing its content.
+     *<p>
+     * Use this when you only need the stored material and amount (e.g. when scanning an inventory).
+     * See {@link StorageBoxItemInfo}.
+     *
+     * @return the info, or {@code null} when the item is not a Storage Box
+     */
+    public static @Nullable StorageBoxItemInfo getItemInfo(@Nullable ItemStack itemStack) {
+        return StorageBoxItemInfo.read(itemStack);
+    }
+
     public static @Nullable StorageBox getStorageBox(@NotNull ItemStack itemStack) {
         try {
             if (itemStack.getType().isAir()) return null;
