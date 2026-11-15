@@ -67,16 +67,12 @@ publishing {
         maven {
             name = "repo"
             credentials(PasswordCredentials::class)
-            url =
-                uri(
-                    if (project.version.toString().endsWith("SNAPSHOT")) {
-                        project.findProperty("deploySnapshotURL")
-                            ?: System.getProperty("deploySnapshotURL", "https://repo.azisaba.net/repository/maven-snapshots/")
-                    } else {
-                        project.findProperty("deployReleasesURL")
-                            ?: System.getProperty("deployReleasesURL", "https://repo.azisaba.net/repository/maven-releases/")
-                    },
-                )
+            url = uri(
+                if (project.version.toString().endsWith("-SNAPSHOT"))
+                    "https://maven.azisaba.net/snapshots"
+                else
+                    "https://maven.azisaba.net/releases"
+            )
         }
     }
 
