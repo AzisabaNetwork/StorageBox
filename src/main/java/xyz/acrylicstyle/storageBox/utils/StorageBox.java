@@ -391,6 +391,13 @@ public class StorageBox {
             adoptComponent(crackShot);
             return crackShot.clone();
         }
+        // CrackShot weapons made from an older weapon configuration: the box holds the weapon rebuilt for today's
+        // configuration from now on, the same one CrackShot gives players (getItemStack saves it)
+        ItemStack updated = CrackShotItems.updateOutdated(stack);
+        if (updated != null) {
+            adoptComponent(updated);
+            return updated.clone();
+        }
         return stack;
     }
 
@@ -551,6 +558,9 @@ public class StorageBox {
         if (stack == null) return false;
         ItemStack component = getComponentItemStack();
         if (component == null) return false;
+        // an old CrackShot weapon the player still has (e.g. picked up before CrackShot rebuilt it)
+        ItemStack updated = CrackShotItems.updateOutdated(stack);
+        if (updated != null) stack = updated;
         // normalized: the same 1.15.2 item differs in its data depending on which plugin converted it
         if (ItemNormalizer.isSimilar(stack, component)) return true;
         return isSameMythicItem(stack, component);
