@@ -383,6 +383,18 @@ public class StorageBox {
      * @return the item
      */
     public @Nullable ItemStack getComponentItemStack() {
+        ItemStack stack = resolveComponentItemStack();
+        // CrackShot items that lost their name keep only the weapon id: the box holds the weapon CrackShot
+        // generates today from now on (getItemStack saves it), so it is a proper weapon again and auto-collects
+        ItemStack crackShot = CrackShotItems.repairNameless(stack);
+        if (crackShot != null) {
+            adoptComponent(crackShot);
+            return crackShot.clone();
+        }
+        return stack;
+    }
+
+    private @Nullable ItemStack resolveComponentItemStack() {
         if (type == null || type.isAir()) {
             return new ItemStack(Material.AIR);
         }
