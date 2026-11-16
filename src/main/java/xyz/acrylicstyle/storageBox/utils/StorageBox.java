@@ -563,7 +563,25 @@ public class StorageBox {
         if (updated != null) stack = updated;
         // normalized: the same 1.15.2 item differs in its data depending on which plugin converted it
         if (ItemNormalizer.isSimilar(stack, component)) return true;
+        if (isSameCrackShotWeaponAfterSaving(stack, component)) return true;
         return isSameMythicItem(stack, component);
+    }
+
+    /**
+     * Whether two CrackShot weapons of the same weapon id are the same item once saved like box contents.
+     * <p>
+     * The content is kept serialized and read back, which does not return every component exactly as it was
+     * (e.g. the explicit attribute modifiers CrackShot copies onto weapons with Hide_Attributes). A weapon a
+     * player carries, even one just taken out of this box, then differs from the content in data only and would
+     * never go back in. Both are compared after the same save round trip instead.
+     */
+    static boolean isSameCrackShotWeaponAfterSaving(@NotNull ItemStack a, @NotNull ItemStack b) {
+        if (a.getType().isAir() || a.getType() != b.getType()) return false;
+        String id = CrackShotItems.weaponId(a);
+        if (id == null || !id.equals(CrackShotItems.weaponId(b))) return false;
+        ItemStack savedA = deserializeItemStack(serializeItemStack(a));
+        ItemStack savedB = deserializeItemStack(serializeItemStack(b));
+        return savedA != null && savedB != null && ItemNormalizer.isSimilar(savedA, savedB);
     }
 
     /**
